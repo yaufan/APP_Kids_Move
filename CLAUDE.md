@@ -68,5 +68,5 @@
 
 ## 目前的狀態（2026-11-15）
 - 0.1.0 做好了、還沒發布：本機的分析、全部測試、完整流程（手機和平板）和示範影片都過了，在本機的 `claude/relaxed-albattani-6mbwpz` 分支 commit。
-- GitHub 專案（`APP_Kids_Move`）可能還沒建；建好、把分支推上去之後，照 skill `release-kids-app` 問使用者能不能推 `main`（會跑 App 和 Release）。Secrets 要在這個專案加好。
+- GitHub 專案 2026-11-15 建好了，工作分支已推上去；照 skill `release-kids-app` 問使用者能不能推 `main`（第一次推 main 會跑 App 和 Release；Secrets 要先放好）。
 - 還沒在真手機上試過：**站在 2 公尺外看不看得清楚動物的姿勢、聽不聽得到**；語音（每隻帶路動物的高低）和音效好不好聽（做的時候沒辦法用耳朵聽）；拍子和音樂會不會慢慢對不上（APP 自己數拍子）；螢幕會不會保持亮著；橫的直的轉來轉去。
