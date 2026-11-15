@@ -928,12 +928,22 @@ SCALE = {"bunny": 1.12, "bird": 1.3, "bird-magpie": 1.2, "duck": 1.35, "squirrel
          "catarch": 1.3, "deer": 1.3, "snake": 1.05, "snake-worm": 1.05, "pangolin": 1.25, "giraffe": 1.0, "flamingo": 1.05, "rainbow": 1.0}
 
 
+# Quiet mode (docs/design.md 「安全」 3): the deer's second pose is a leap in the air, so quiet mode
+# shows a big walking step instead (moves.dart `quietPoses`, `moves/deer-quiet_b.svg`).
+QUIET = {
+    "deer": _quad(deer_side_look, dy=8, fn=(30, -25), ff=(15, -15), bn=(-35, 30), bf=(-18, 20), mouth=.3),
+}
+
+
 def draw(name, frame):
     """One pose of a move: a Ctx with it drawn, scaled about the floor."""
     c = kit.Ctx(W, H)
     s = SCALE.get(name, 1.2)
     c.begin(f"translate(150 {G}) scale({s}) translate(-150 -{G})")
-    MOVES[name]["ab".index(frame)](c, f"{name}{frame}")
+    if frame == "quiet":
+        QUIET[name](c, f"{name}q")
+    else:
+        MOVES[name]["ab".index(frame)](c, f"{name}{frame}")
     c.end()
     return c
 
@@ -947,7 +957,9 @@ def build():
     for name, frames in MOVES.items():
         for f in "ab":
             total += kit.write_svg(out / f"{name}_{f}.svg", draw(name, f).svg(), (W, H))
-    print(f"animals: {len(MOVES) * 2} poses, {total:.0f} KB")
+    for name in QUIET:
+        total += kit.write_svg(out / f"{name}-quiet_b.svg", draw(name, "quiet").svg(), (W, H))
+    print(f"animals: {len(MOVES) * 2 + len(QUIET)} poses, {total:.0f} KB")
 
 
 if __name__ == "__main__":

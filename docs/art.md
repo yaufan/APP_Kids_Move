@@ -14,8 +14,8 @@
 ## 檔案和位置（APP 用的名字要和這裡一樣）
 | 檔案 | 大小（viewBox） | APP 怎麼用 |
 |---|---|---|
-| `moves/<動作>_<a\|b>.svg` | 300 × 240 | 每個動作兩個姿勢（`animals.py` 的 `MOVES`），地板在 y = 222。APP 照拍子換姿勢，再加上整隻跳、搖、爬、游（`lib/app/figures.dart` 的 `PoseView`）。換一隻動物做同一個動作：`snake-worm_a.svg`（蚯蚓扭扭）、`bird-magpie_a.svg`（台灣藍鵲飛） |
-| `kids/<動作>_<a\|b>.svg` | 160 × 160 | 「像這樣」：小朋友示範人的做法（`kids.py`），地板在 y = 150 |
+| `moves/<動作>_<a\|b>.svg` | 300 × 240 | 每個動作兩個姿勢（`animals.py` 的 `MOVES`），地板在 y = 222。APP 照拍子換姿勢，再加上整隻跳、搖、爬、游（`lib/app/figures.dart` 的 `PoseView`）。換一隻動物做同一個動作：`snake-worm_a.svg`（蚯蚓扭扭）、`bird-magpie_a.svg`（台灣藍鵲飛）。安靜模式的梅花鹿大步走：`deer-quiet_b.svg`（`animals.py` 的 `QUIET`） |
+| `kids/<動作>_<a\|b>.svg` | 160 × 160 | 「像這樣」：小朋友示範人的做法（`kids.py`），地板在 y = 150；安靜模式的 `kids/<動作>-quiet_b.svg`（青蛙、兔子、袋鼠、梅花鹿：腳不離開地面，`kids.py` 的 `QUIET`） |
 | `guides/<帶路動物>_<idle\|wave\|sleep>.svg` | 240 × 240 | 六隻帶路的動物（`guides.py`）：站著、揮手（換動作的時候）、睡覺（休息畫面） |
 | `scenes/<home,jungle,zoo,sea,rain,mountain,party,calm,rest>.svg` | 400 × 250 | 背景，從下面對齊填滿；直的時候左右會被切掉，重要的東西不放邊邊 |
 | `safety/<clear,nobed,feet,phone,spin>.svg` | 200 × 150（spin 200 × 160） | 「先看看四周」的四張卡和轉一圈的小朋友 |

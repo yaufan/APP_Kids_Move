@@ -62,9 +62,9 @@ void main() {
     final app = await TestApp.start(tester);
     await app.tapLabel('家長', ms: 600);
     expect(find.textContaining('加'), findsOneWidget);
-    for (var i = 0; i < 3; i++) {
-      await tester.tap(find.byKey(const ValueKey('gate-key-1')));
-      await app.settle(100);
+    // Zeros are never the answer (6 to 18): three misses whatever the sums
+    // (typing 「1」「0」 opened the gate whenever a sum came out at ten).
+    for (var i = 0; i < 6 && find.textContaining('請等').evaluate().isEmpty; i++) {
       await tester.tap(find.byKey(const ValueKey('gate-key-0')));
       await app.settle(100);
     }

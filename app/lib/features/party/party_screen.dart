@@ -8,6 +8,7 @@ import '../../app/figures.dart';
 import '../../app/strings.dart';
 import '../../app/theme.dart';
 import '../../app/widgets.dart';
+import '../../core/game.dart';
 import '../../core/moves.dart';
 import '../../core/providers.dart';
 import '../../core/screen.dart';
@@ -150,12 +151,15 @@ class _PartyScreenState extends ConsumerState<PartyScreen> with HushOnLeave {
     _screen.keepOn(false);
     sfx(ref, 'bow');
     final said = speak(ref, Strings.bow);
-    if (ref.read(windDownProvider)) {
-      _windingDown = true;
-      _later = Later(const Duration(seconds: 5), () {
-        if (mounted) finishGo(ref, context);
-      }, after: said);
-    }
+    if (ref.read(windDownProvider)) _restSoon(said);
+  }
+
+  /// The party is over and the play time has run out: to the rest in a moment.
+  void _restSoon([Future<void>? said]) {
+    setState(() => _windingDown = true);
+    _later = Later(const Duration(seconds: 5), () {
+      if (mounted) finishGo(ref, context);
+    }, after: said);
   }
 
   // ---- the grown-up as DJ (raw pointer events; the first finger only)
@@ -206,6 +210,11 @@ class _PartyScreenState extends ConsumerState<PartyScreen> with HushOnLeave {
 
   @override
   Widget build(BuildContext context) {
+    // The time ran out while the bow panel was up: rest after all.
+    ref.listen(windDownProvider, (_, on) {
+      if (on && _phase == PartyPhase.end && !_windingDown) _restSoon();
+    });
+    final settings = ref.watch(gameProvider.select((g) => g.settings));
     final playing = !_paused && _phase == PartyPhase.dance;
     return WithMusic(
       music: playing ? Music.party : null,
@@ -219,7 +228,7 @@ class _PartyScreenState extends ConsumerState<PartyScreen> with HushOnLeave {
                 onPointerDown: _djDown,
                 onPointerUp: _djUp,
                 onPointerCancel: _djUp,
-                child: Scene('scenes/party', child: LayoutBuilder(builder: (context, box) => _stage(box))),
+                child: Scene('scenes/party', child: LayoutBuilder(builder: (context, box) => _stage(box, settings))),
               ),
             ),
             Positioned(
@@ -282,17 +291,20 @@ class _PartyScreenState extends ConsumerState<PartyScreen> with HushOnLeave {
     );
   }
 
-  Widget _stage(BoxConstraints box) {
+  Widget _stage(BoxConstraints box, Settings s) {
     final w = wide(box);
     final frozen = _phase == PartyPhase.freeze;
     final pose = _frozen?.pose;
     final dancing = _phase == PartyPhase.dance && !_paused;
-    Widget dancer(String id, int i) {
-      final m = movesById[id]!;
+    // Only animals whose move a parent left on dance.
+    final on = partyDancers(s);
+    Widget dancer(int i) {
+      if (i >= on.length) return const SizedBox.shrink();
+      final m = movesById[on[i]]!;
       return PoseView(
-        key: ValueKey('dancer-$id'),
-        a: poseArt(m, m.species, 'a'),
-        b: poseArt(m, m.species, 'b'),
+        key: ValueKey('dancer-${m.id}'),
+        a: poseArt(m, m.species, 'a', quiet: s.quiet),
+        b: poseArt(m, m.species, 'b', quiet: s.quiet),
         beat: _beat + i,
         beatLength: Music.party.beat,
         motion: i.isEven ? Motion.bounce : Motion.sway,
@@ -303,12 +315,14 @@ class _PartyScreenState extends ConsumerState<PartyScreen> with HushOnLeave {
 
     final floor = Padding(
       padding: EdgeInsets.fromLTRB(12, 70, 12, _dj ? 44 : 12),
-      child: w
-          ? Row(children: [for (var i = 0; i < dancers.length; i++) Expanded(child: dancer(dancers[i], i))])
-          : Column(children: [
-              Expanded(child: Row(children: [Expanded(child: dancer(dancers[0], 0)), Expanded(child: dancer(dancers[1], 1))])),
-              Expanded(child: Row(children: [Expanded(child: dancer(dancers[2], 2)), Expanded(child: dancer(dancers[3], 3))])),
-            ]),
+      child: on.isEmpty
+          ? const Center(child: Bob(amount: 6, child: GuideView(size: 220)))
+          : w
+              ? Row(children: [for (var i = 0; i < on.length; i++) Expanded(child: dancer(i))])
+              : Column(children: [
+                  Expanded(child: Row(children: [Expanded(child: dancer(0)), Expanded(child: dancer(1))])),
+                  if (on.length > 2) Expanded(child: Row(children: [Expanded(child: dancer(2)), Expanded(child: dancer(3))])),
+                ]),
     );
     if (!frozen) return floor;
     final count = CountDots(count: _frozen!.seconds, lit: _lit, size: w ? 36 : 40);

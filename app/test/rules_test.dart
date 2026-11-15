@@ -98,6 +98,27 @@ void main() {
       expect(p.steps.any((s) => s.move.jump), isFalse);
     });
 
+    test('a spare does not bring the story of the move it stands in for (「跳過荷葉！」, 「爬過山洞！」)', () {
+      final off = {for (final m in moves) if (m.jump || m.floor) m.id};
+      for (final a in adventures) {
+        final p = adventurePlan(a, Settings(level: Level.big, off: off));
+        for (final s in p.steps) {
+          expect(s.story == null || !RegExp('[跳跨爬鑽]').hasMatch(s.story!), isTrue, reason: '${a.id}: ${s.story} for ${s.move.id}');
+        }
+      }
+    });
+
+    test('quiet mode: the stories do not ask for a jump either', () {
+      for (final a in adventures) {
+        final p = adventurePlan(a, const Settings(level: Level.big, quiet: true));
+        for (final s in p.steps.where((s) => s.move.jump)) {
+          expect(s.story, isNot(matches('[跳跨]')), reason: '${a.id} ${s.move.id}');
+        }
+        final loud = adventurePlan(a, const Settings(level: Level.big));
+        expect([for (final s in loud.steps) s.story], contains(a.steps.first.story), reason: 'the story itself is kept when not quiet');
+      }
+    });
+
     test('a small space only has moves done on the spot', () {
       for (final a in adventures) {
         final p = adventurePlan(a, const Settings(level: Level.big, smallSpace: true));
@@ -177,6 +198,14 @@ void main() {
       }
       final none = partyPlan(Settings(level: Level.big, off: freezePoses.toSet()), math.Random(1));
       expect(none.every((x) => x.pose == null), isTrue, reason: 'all poses off: just keep still');
+    });
+
+    test('the dancers are animals a parent left on (four, fewer, or none)', () {
+      expect(partyDancers(const Settings()), dancers);
+      final jumpsOff = Settings(off: {for (final m in moves) if (m.jump) m.id});
+      expect(partyDancers(jumpsOff), hasLength(4));
+      expect(partyDancers(jumpsOff).where(jumpsOff.off.contains), isEmpty);
+      expect(partyDancers(Settings(off: {for (final m in moves) m.id})), isEmpty);
     });
   });
 

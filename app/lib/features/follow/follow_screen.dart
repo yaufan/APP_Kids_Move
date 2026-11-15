@@ -68,6 +68,12 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
   Later? _later;
   var _windingDown = false;
 
+  /// Running for a moment after the screen moved on to 「喘口氣」 or to the
+  /// next animal: a 「做好了！」 then is the same tap as the one before (or
+  /// came as the music ran out), so it does not skip on a second time.
+  Timer? _tapGuard;
+  static const _sameTap = Duration(milliseconds: 800);
+
   PlanStep get _step => _plan.steps[_i];
   Settings get _s => ref.read(gameProvider).settings;
   Music get _music => _step.stretch || widget.source == FollowSource.calm ? Music.calm : _plan.music;
@@ -99,9 +105,15 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
   void dispose() {
     _timer?.cancel();
     _later?.cancel();
+    _tapGuard?.cancel();
     _life.dispose();
     _screen.keepOn(false);
     super.dispose();
+  }
+
+  void _guardTaps() {
+    _tapGuard?.cancel();
+    _tapGuard = Timer(_sameTap, () {});
   }
 
   void _stopAll() {
@@ -114,6 +126,7 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
   // ---------------------------------------------------------------- the steps
   void _start(int i) {
     _stopAll();
+    _guardTaps();
     final step = _plan.steps[i];
     setState(() {
       _i = i;
@@ -162,6 +175,9 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
 
   void _onBeat() {
     if (!mounted || _paused) return;
+    // The play time ran out: the move's music is over, so the screen does not
+    // wait for 「做好了！」 (on to the slow stretch, then the rest).
+    if (_phase == Phase.wait && ref.read(windDownProvider)) return _breathe();
     final m = _step.move;
     setState(() {
       _beat++;
@@ -178,7 +194,7 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
       speak(ref, lines[(_beat ~/ 8 - 1) % lines.length]);
     }
     if (_beat >= _total) {
-      if (_s.mustTap) {
+      if (_s.mustTap && !ref.read(windDownProvider)) {
         setState(() => _phase = Phase.wait);
         speak(ref, Strings.tapWhenDone);
       } else {
@@ -213,6 +229,7 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
       _finish();
       return;
     }
+    _guardTaps();
     setState(() => _phase = Phase.breathe);
     sfx(ref, 'breath');
     _later = Later(const Duration(seconds: 3), _next, after: speak(ref, '${Strings.thanks(_step.name)}${Strings.phew}'));
@@ -239,16 +256,20 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
     final guide = ref.read(gameProvider).guide ?? Guide.macaque;
     final line = widget.source == FollowSource.calm ? Strings.calmDone : '${Strings.allThanks}${guide.cheer}';
     final said = speak(ref, line);
-    if (ref.read(windDownProvider)) {
-      _windingDown = true;
-      _later = Later(const Duration(seconds: 5), () {
-        if (mounted) finishGo(ref, context);
-      }, after: said);
-    }
+    if (ref.read(windDownProvider)) _restSoon(said);
+  }
+
+  /// The go is over and the play time has run out: to the rest in a moment.
+  void _restSoon([Future<void>? said]) {
+    setState(() => _windingDown = true);
+    _later = Later(const Duration(seconds: 5), () {
+      if (mounted) finishGo(ref, context);
+    }, after: said);
   }
 
   // ---------------------------------------------------------------- the buttons
   void _done() {
+    if (_tapGuard?.isActive ?? false) return;
     switch (_phase) {
       case Phase.look:
       case Phase.move:
@@ -262,8 +283,11 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
     }
   }
 
+  /// 「再一次」 (not once the play time has run out: that would never end).
+  bool get _canAgain => (_phase == Phase.move || _phase == Phase.wait) && !ref.read(windDownProvider);
+
   void _again() {
-    if (_phase != Phase.move && _phase != Phase.wait) return;
+    if (!_canAgain) return;
     _moveStart();
   }
 
@@ -307,6 +331,11 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(gameProvider.select((g) => g.settings));
+    // The time ran out while the 「謝謝你陪我們！」 panel was up: rest after all.
+    ref.listen(windDownProvider, (_, on) {
+      if (on && _phase == Phase.end && !_windingDown) _restSoon();
+    });
+    ref.watch(windDownProvider);
     final step = _step;
     final calm = widget.source == FollowSource.calm || step.stretch;
     return WithMusic(
@@ -349,7 +378,7 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
         : PoseView(
             key: ValueKey('pose-${step.pose('a')}'),
             a: step.pose('a'),
-            b: step.pose('b'),
+            b: step.pose('b', quiet: s.quiet),
             beat: _beat,
             beatLength: step.stretch ? breathIn : _music.beat,
             motion: m.motionFor(quietMode: s.quiet),
@@ -409,7 +438,7 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
 
   Widget _card(PlanStep step, Settings s, bool w) {
     final m = step.move;
-    final kid = m == breathe ? null : PoseView(a: kidArt(m, 'a'), b: kidArt(m, 'b'), beat: _beat, beatLength: step.stretch ? breathIn : _music.beat, motion: Motion.still, moving: _phase == Phase.move || _phase == Phase.wait, fast: step.fast, amount: .3);
+    final kid = m == breathe ? null : PoseView(a: kidArt(m, 'a'), b: kidArt(m, 'b', quiet: s.quiet), beat: _beat, beatLength: step.stretch ? breathIn : _music.beat, motion: Motion.still, moving: _phase == Phase.move || _phase == Phase.wait, fast: step.fast, amount: .3);
     final big = TextStyle(fontSize: w ? 26 : 28, fontWeight: FontWeight.w700, height: 1.2);
     return Container(
       margin: EdgeInsets.fromLTRB(w ? 0 : 10, w ? 10 : 6, 10, 10),
@@ -459,8 +488,8 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
           ),
           const SizedBox(width: 8),
           Opacity(
-            opacity: _phase == Phase.move || _phase == Phase.wait ? 1 : .45,
-            child: RoundButton(label: Strings.again, icon: Icons.replay_rounded, onTap: _phase == Phase.move || _phase == Phase.wait ? _again : null, size: 52),
+            opacity: _canAgain ? 1 : .45,
+            child: RoundButton(label: Strings.again, icon: Icons.replay_rounded, onTap: _canAgain ? _again : null, size: 52),
           ),
         ]),
       ]),

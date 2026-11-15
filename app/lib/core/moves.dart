@@ -612,12 +612,22 @@ const softSounds = {
 /// [sfx], or its soft version in quiet mode.
 String soundFor(String sfx, {required bool quiet}) => quiet ? softSounds[sfx] ?? sfx : sfx;
 
-/// The art of a move's two poses (assets/art/moves/): `frog_a`, or with
-/// another animal doing it, `snake-worm_a`.
-String poseArt(Move m, Species s, String frame) => s == m.species ? 'moves/${m.id}_$frame' : 'moves/${m.id}-${s.name}_$frame';
+/// Moves whose second pose leaves the floor: in quiet mode the child
+/// showing 「像這樣」 keeps the feet down instead (`kids/frog-quiet_b`), and
+/// the deer takes a big step instead of leaping (`moves/deer-quiet_b`).
+const quietKids = {'frog', 'bunny', 'kangaroo', 'deer'};
+const quietPoses = {'deer'};
 
-/// The child showing how a person does it (assets/art/kids/).
-String kidArt(Move m, String frame) => 'kids/${m.id}_$frame';
+/// The art of a move's two poses (assets/art/moves/): `frog_a`, or with
+/// another animal doing it, `snake-worm_a`; [quiet] for quiet mode's.
+String poseArt(Move m, Species s, String frame, {bool quiet = false}) {
+  if (s != m.species) return 'moves/${m.id}-${s.name}_$frame';
+  return quiet && frame == 'b' && quietPoses.contains(m.id) ? 'moves/${m.id}-quiet_b' : 'moves/${m.id}_$frame';
+}
+
+/// The child showing how a person does it (assets/art/kids/); [quiet] for
+/// quiet mode's version (no leaving the floor).
+String kidArt(Move m, String frame, {bool quiet = false}) => quiet && frame == 'b' && quietKids.contains(m.id) ? 'kids/${m.id}-quiet_b' : 'kids/${m.id}_$frame';
 
 /// The moves with a second animal (art is drawn for these pairs only).
 const alsoDoneBy = {'snake': [Species.worm], 'bird': [Species.magpie]};

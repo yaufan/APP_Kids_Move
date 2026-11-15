@@ -23,7 +23,7 @@ class PlanStep {
   /// The slow stretch at the end, with the breathing flower.
   final bool stretch;
 
-  String pose(String frame) => poseArt(move, species, frame);
+  String pose(String frame, {bool quiet = false}) => poseArt(move, species, frame, quiet: quiet);
 }
 
 /// What a go is, in order, and what it ends with.
@@ -84,14 +84,17 @@ Plan adventurePlan(Adventure a, Settings s) {
     if (step.from.index > s.level.index) continue;
     final m = movesById[step.move]!;
     if (s.allows(m) && !(used.contains(m.id) && !step.fast)) {
-      out.add(PlanStep(m, animal: step.species, title: step.name, story: step.story, fast: step.fast));
+      final story = s.quiet ? step.quietStory ?? step.story : step.story;
+      out.add(PlanStep(m, animal: step.species, title: step.name, story: story, fast: step.fast));
       used.add(m.id);
       continue;
     }
     final inPlan = {for (final x in a.steps) x.move};
     final spare = spares.map((id) => movesById[id]!).where((x) => s.allows(x) && !used.contains(x.id) && !inPlan.contains(x.id)).firstOrNull;
     if (spare != null) {
-      out.add(PlanStep(spare, story: step.story));
+      // Not the story of the move it stands in for: 「爬過山洞！」 or 「跳過荷葉！」
+      // would ask for the very move the parent turned off.
+      out.add(PlanStep(spare));
       used.add(spare.id);
     }
   }
@@ -191,8 +194,17 @@ List<Freeze> partyPlan(Settings s, math.Random r) {
   return out;
 }
 
-/// The dancers on the stage in 動物舞會.
+/// The dancers on the stage in 動物舞會, and who steps in for one a parent
+/// turned off.
 const dancers = ['frog', 'penguin', 'elephant', 'monkey'];
+const _spareDancers = ['giraffe', 'jellyfish', 'squirrel', 'fish', 'flamingo', 'sloth'];
+
+/// The four dancers for these settings: none a parent turned off (fewer, or
+/// none, when nearly everything is off).
+List<String> partyDancers(Settings s) => [
+      for (final id in [...dancers, ..._spareDancers])
+        if (!s.off.contains(id)) id,
+    ].take(dancers.length).toList();
 
 /// A card for 自己排's 「隨便來一個」: one that is on and not in the row yet
 /// (any that is on, if all are in the row). Null when none is on.

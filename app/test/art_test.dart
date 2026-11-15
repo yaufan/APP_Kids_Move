@@ -19,7 +19,12 @@ void main() {
       for (final e in alsoDoneBy.entries)
         for (final s in e.value)
           for (final f in ['a', 'b']) poseArt(movesById[e.key]!, s, f),
+      // Quiet mode's versions with the feet down.
+      for (final id in quietPoses) poseArt(movesById[id]!, movesById[id]!.species, 'b', quiet: true),
+      for (final id in quietKids) kidArt(movesById[id]!, 'b', quiet: true),
     ];
+    expect(quietKids.every((id) => kidArt(movesById[id]!, 'b', quiet: true) != kidArt(movesById[id]!, 'b')), isTrue);
+    expect(quietKids, containsAll([for (final m in moves) if (m.jump && m.id != 'starfish') m.id]), reason: 'every jump that leaves the floor has a quiet child');
     expect([for (final p in wanted) if (!has(p)) p], isEmpty, reason: 'draw these in design/art/');
     final drawn = Directory('assets/art/moves').listSync().length;
     expect(drawn, wanted.where((p) => p.startsWith('moves/')).length, reason: 'no pose left over');

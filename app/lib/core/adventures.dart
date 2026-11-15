@@ -3,12 +3,15 @@ import 'sounds.dart';
 
 /// One move in an adventure, from the level it starts at (小小 does fewer).
 class Step {
-  const Step(this.move, this.story, {this.from = Level.small, this.species, this.name, this.fast = false});
+  const Step(this.move, this.story, {this.from = Level.small, this.species, this.name, this.fast = false, this.quietStory});
 
   final String move;
 
   /// What it is in the story (「跳過荷葉，去找香蕉！」).
   final String story;
+
+  /// The story in quiet mode, when [story] asks for a jump (「蹲在荷葉上！」).
+  final String? quietStory;
   final Level from;
 
   /// Another animal doing the same move (蚯蚓扭扭 is 蛇扭扭 done by a worm).
@@ -68,7 +71,7 @@ const adventures = <Adventure>[
     steps: [
       Step('giraffe', '先伸伸懶腰，看看香蕉在哪裡！'),
       Step('monkey', '猴子摸摸，準備出發！', from: Level.mid),
-      Step('frog', '跳過荷葉！'),
+      Step('frog', '跳過荷葉！', quietStory: '蹲在荷葉上！'),
       Step('bear', '爬過山洞！'),
       Step('snake', '鑽過草叢！', from: Level.big),
       Step('elephant', '大象來了，踩踩踩！'),
@@ -86,7 +89,7 @@ const adventures = <Adventure>[
     lead: Species.penguin,
     steps: [
       Step('penguin', '第一間，企鵝館！'),
-      Step('kangaroo', '袋鼠在跳高！'),
+      Step('kangaroo', '袋鼠在跳高！', quietStory: '袋鼠在伸高高！'),
       Step('giraffe', '長頸鹿在吃樹葉！'),
       Step('elephant', '大象在散步！'),
       Step('flamingo', '紅鶴在池子邊！'),
@@ -124,10 +127,10 @@ const adventures = <Adventure>[
     free: false,
     lead: Species.duck,
     steps: [
-      Step('frog', '跳過水窪！'),
+      Step('frog', '跳過水窪！', quietStory: '蹲在水窪邊！'),
       Step('duck', '鴨子在雨裡走！'),
       Step('snake', '蚯蚓鑽出來了！', from: Level.mid, species: Species.worm, name: '蚯蚓扭扭'),
-      Step('bunny', '兔子跳過水窪！', from: Level.big),
+      Step('bunny', '兔子跳過水窪！', from: Level.big, quietStory: '兔子踮腳看水窪！'),
       Step('squirrel', '松鼠撿果子回家！'),
       Step('bird', '小鳥飛回家！'),
       Step('flamingo', '紅鶴站在石頭上躲雨。'),
@@ -145,7 +148,7 @@ const adventures = <Adventure>[
     steps: [
       Step('tiptoe', '石虎躡手躡腳，噓！'),
       Step('bear', '台灣黑熊爬過來！'),
-      Step('deer', '梅花鹿跨過小溪！'),
+      Step('deer', '梅花鹿跨過小溪！', quietStory: '梅花鹿大步走過小溪！'),
       Step('bird', '台灣藍鵲飛過山谷！', species: Species.magpie, name: '台灣藍鵲飛'),
       Step('salmon', '櫻花鉤吻鮭往上游！', from: Level.mid),
       Step('monkey', '台灣獼猴摸摸！'),

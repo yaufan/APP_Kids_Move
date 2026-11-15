@@ -161,8 +161,21 @@ POSES = {
 }
 
 
+# Quiet mode (docs/design.md 「安全」 3): the second pose of these moves leaves the floor, so quiet
+# mode shows the child with the feet down instead (moves.dart `quietKids`, `kids/<move>-quiet_b.svg`).
+QUIET = {
+    "frog": dict(ll=(-4, 0), rl=(4, 0), la=(-160, -175), ra=(160, 175), mouth=.7, look=(0, -.5)),      # stand up, 呱
+    "bunny": dict(dy=-4, ll=(-3, 0), rl=(3, 0), la=(30, 150), ra=(-30, -150), mouth=.5),             # up on tiptoe
+    "kangaroo": dict(dy=-4, la=(-170, -178), ra=(170, 178), mouth=.6, look=(0, -.5)),                 # tiptoe, arms up
+    "deer": dict(ll=(-34, -10), rl=(16, 2), la=(-14, -8), ra=(34, 24), mouth=.3),                      # a big step
+}
+
+
 def draw(move, frame):
     c = kit.Ctx(W, H)
+    if frame == "quiet":
+        kid(c, QUIET[move], f"kid{move}q")
+        return c
     kid(c, POSES[move]["ab".index(frame)], f"kid{move}{frame}")
     return c
 
@@ -176,7 +189,9 @@ def build():
     for move in POSES:
         for f in "ab":
             total += kit.write_svg(out / f"{move}_{f}.svg", draw(move, f).svg(), (W, H))
-    print(f"kids: {len(POSES) * 2} poses, {total:.0f} KB")
+    for move in QUIET:
+        total += kit.write_svg(out / f"{move}-quiet_b.svg", draw(move, "quiet").svg(), (W, H))
+    print(f"kids: {len(POSES) * 2 + len(QUIET)} poses, {total:.0f} KB")
 
 
 if __name__ == "__main__":

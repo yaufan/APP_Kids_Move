@@ -54,6 +54,12 @@ class SessionStart extends Notifier<DateTime> {
     final now = ref.read(clockProvider)(), later = state.add(d);
     state = later.isAfter(now) ? now : later;
   }
+
+  /// The phone's clock was moved back by [d]: the sitting moves back with
+  /// it, so the minutes already played still count.
+  void back(Duration d) {
+    if (d > Duration.zero) state = state.subtract(d);
+  }
 }
 
 /// A simple on/off flag that screens and the play-time keeper share.
