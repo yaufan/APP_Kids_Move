@@ -64,9 +64,17 @@
 - `app/lib/features/`：第一次的問題（`hello`）、選帶路的動物（`guide`）、首頁（`home`）、先看看四周（`space`）、跟著做（`follow`：冒險、自己排、慢慢伸展都用它）、動物舞會（`party`）、自己排（`build`）、休息（`rest`）、家長關卡和家長模式（`parent`）。
 - Android `MainActivity.kt` 和 iOS `AppDelegate.swift` 的 `animal_moves/screen` 通道：動的時候螢幕保持亮著（視窗旗標，不要權限）。
 - 圖：`design/art/`（`kit.py` 毛球、毛根、會轉的大眼睛、不織布；`animals.py` 兩種骨架和每個動作的兩個姿勢；`kids.py`「像這樣」；`guides.py`；`scenes.py`；`ui.py`（含先看看四周的卡）；`icon.py`；`build.py all`、`sheet`、`fluttercheck`），約定在 `docs/art.md`。聲音：`design/sounds/make_sounds.py`（86 個檔，`README.md` 有每一個）。
-- 測試：`rules_test`（動作、冒險、換掉關掉的動作、舞會、自己排、存檔、不說「做對了」）、`art_test`、`safety_test`（權限、家長關卡、先看看四周、免費版）、`version_test`、`layout_test`（每個畫面在手機和平板、橫的直的都排得下）、`screens_test`（家長模式和背景不算時間、離開畫面的語音、等語音念完、第一根手指、關掉的動作不再出現、過午夜、三個聲音開關、「做好了」才往下、時間到了先做完、伸展不被打斷）、`flow_test`（手機和平板、三個難度、每個玩法、橫的直的都截圖）、`demo/demo_video_test.dart`（`--dart-define=DEMO=true`，再 `python3 tools/demo_audio.py`）。
+- 測試：`rules_test`（動作、冒險、換掉關掉的動作、舞會、自己排、存檔、不說「做對了」）、`art_test`、`safety_test`（權限、家長關卡、先看看四周、免費版）、`version_test`、`layout_test`（每個畫面在手機和平板、橫的直的都排得下）、`screens_test`（家長模式和背景不算時間、離開畫面的語音、等語音念完、第一根手指、關掉的動作不再出現、過午夜、三個聲音開關、「做好了」才往下、時間到了先做完、伸展不被打斷；程式檢查加的：安靜模式的圖和故事、連按「做好了」、時間到了最多再三分鐘、背景和手機時間往回調、全部關掉也能玩、音樂停和開始的順序）、`flow_test`（手機和平板、三個難度、每個玩法、橫的直的都截圖）、`demo/demo_video_test.dart`（`--dart-define=DEMO=true`，再 `python3 tools/demo_audio.py`）。
 
 ## 目前的狀態（2026-11-15）
 - 0.1.0 做好了、還沒發布：本機的分析、全部測試、完整流程（手機和平板）和示範影片都過了，在本機的 `claude/relaxed-albattani-6mbwpz` 分支 commit。
+- 2026-11-15 做過一次程式檢查（版本還是 0.1.0），修了：
+  - 安靜模式：「像這樣」的小朋友不再跳在空中（青蛙、兔子、袋鼠、梅花鹿有腳不離地的圖 `kids/<動作>-quiet_b.svg`），梅花鹿自己也改成大步走（`moves/deer-quiet_b.svg`）；故事不再說「跳過荷葉」這類的話（`adventures.dart` 的 `quietStory`）。
+  - 家長關掉的動作被換掉時，備用動作不再帶著原來的故事（例如關掉趴地的動作，還說「爬過山洞！」）；動物舞會台上跳舞的動物也不會是關掉的（`partyDancers`）。
+  - 「做好了！」連按兩下、或剛好在音樂結束時按，只往下一次（`follow_screen.dart` 的 `_tapGuard`，0.8 秒）。
+  - 時間到了：「一定要按做好了」的等待會自己往伸展走、「再一次」不能按、停在「謝謝你陪我們」的畫面也會去休息；不管怎麼暫停、繼續，最多再動三分鐘就休息（`RestGuard.windDownMost`）。
+  - `RestGuard`：家長模式和暫停的時間從換畫面的那一刻算（不再差到兩秒）；APP 在背景不到十分鐘的時間不算玩的時間、在背景時不會叫休息；手機時間往回調不會多玩。
+  - 音樂：停的指令會排在還在載入的開始之後，「停！」或暫停時音樂不會又響起來（`SystemSounds` 的 `_switching`，測試用 `MusicLoop`）。
+  - 不穩定的測試：家長關卡鎖住的測試按「1」「0」，題目剛好等於 10 時會答對；改成只按「0」。
 - GitHub 專案 2026-11-15 建好了，工作分支已推上去；照 skill `release-kids-app` 問使用者能不能推 `main`（第一次推 main 會跑 App 和 Release；Secrets 要先放好）。
 - 還沒在真手機上試過：**站在 2 公尺外看不看得清楚動物的姿勢、聽不聽得到**；語音（每隻帶路動物的高低）和音效好不好聽（做的時候沒辦法用耳朵聽）；拍子和音樂會不會慢慢對不上（APP 自己數拍子）；螢幕會不會保持亮著；橫的直的轉來轉去。
