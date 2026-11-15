@@ -454,7 +454,7 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
             child: AnimatedScale(
               scale: _phase == Phase.wait ? 1.06 : 1,
               duration: const Duration(milliseconds: 300),
-              child: PillButton(label: Strings.done, icon: Icons.check_rounded, onTap: _phase == Phase.end ? null : _done, height: 60, expand: true, color: Felt.done),
+              child: PillButton(label: Strings.done, onTap: _phase == Phase.end ? null : _done, height: 60, expand: true, color: Felt.done),
             ),
           ),
           const SizedBox(width: 8),
