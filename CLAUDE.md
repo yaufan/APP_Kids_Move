@@ -59,21 +59,23 @@
 - 示範影片（每一版都要給使用者）：在 `app/` 裡 `flutter test test/demo/demo_video_test.dart --dart-define=DEMO=true`（約 5～10 分鐘，要 ffmpeg），再在專案根目錄 `python3 tools/demo_audio.py` 把背景音樂和音效混進去。輸出 `app/build/demo/demo.mp4`；`chapters.txt` 是每一段開始的格數（每秒 10 格），用來剪新功能的片段。
 
 ## 程式在哪裡
-- `app/lib/core/`：29 個動作（`moves.dart`：三個難度的做法、安靜模式的版本、練到什麼、跳／趴跪坐／要走動的標記、招牌聲和每一拍的音效、`softSounds` 安靜模式換軟的音效）、五個冒險（`adventures.dart`：每一步從哪個難度開始、蚯蚓和藍鵲是同一個動作換動物）、六隻帶路的動物（`guides.dart`：叫聲、語音高低、口頭禪）、一次的計畫（`session.dart`：冒險／自己排／慢慢伸展變成一串步驟，家長關掉的動作換成備用的或跳過，最後一定是伸展；一個動作幾小節；動物舞會什麼時候停）、設定和紀錄（`game.dart`：今天的章、兩週的分鐘、存的體操、休息）、聲音（`sounds.dart`：九首曲子和每分鐘幾拍）、語音、螢幕保持亮著（`screen.dart`）、存檔、providers（`windDownProvider` 時間到了先做完、`spaceOkProvider` 看過四周、`pausedProvider`、`draftProvider` 自己排的那一排）。
-- `app/lib/app/`：路由和休息時間（`app.dart`：`RestGuard` 不算家長模式和背景的時間，動的畫面先做完動作和伸展才休息；`finishGo`）、毛球偶的動畫（`figures.dart`：`PoseView` 照拍子換兩個姿勢再加整隻的動作、`BreathFlower`）、共用元件（`widgets.dart`：`Pressable` 原始手指事件、只認第一根手指、滑走或取消不算點；`speak`、`HushOnLeave`、`Later` 等語音念完）、文字（`strings.dart`）、顏色。
-- `app/lib/features/`：第一次的問題（`hello`）、選帶路的動物（`guide`）、首頁（`home`）、先看看四周（`space`）、跟著做（`follow`：冒險、自己排、慢慢伸展都用它）、動物舞會（`party`）、自己排（`build`）、休息（`rest`）、家長關卡和家長模式（`parent`）。
+- `app/lib/core/`：29 個動作（`moves.dart`：三個難度的做法、安靜模式的版本、練到什麼、跳／趴跪坐／要走動的標記、招牌聲和每一拍的音效、`softSounds` 安靜模式換軟的音效）、五個冒險（`adventures.dart`：每一步從哪個難度開始、蚯蚓和藍鵲是同一個動作換動物）、六隻帶路的動物（`guides.dart`：叫聲、語音高低、口頭禪）、一次的計畫（`session.dart`：冒險／自己排／慢慢伸展變成一串步驟，家長關掉的動作換成備用的或跳過，最後一定是伸展；一個動作幾小節；動物舞會什麼時候停）、設定和紀錄（`game.dart`：今天的章、兩週的分鐘、存的體操、休息、這次玩了多久 `Sitting`（關掉 10 分鐘內再打開接著算）、家長關卡連錯的等待 `GateLock`）、聲音（`sounds.dart`：九首曲子和每分鐘幾拍；`soundContext` 走媒體音量）、語音（設定只做一次、只念最新的一句、APP 在背景時不說）、螢幕保持亮著（`screen.dart`：`ScreenAwake` 記是哪些畫面要亮著，先看看四周、跟著做、舞會）、存檔、providers（`windDownProvider` 時間到了先做完、`spaceOkProvider` 看過四周、`pausedProvider`、`draftProvider` 自己排的那一排）。
+- `app/lib/app/`：路由和休息時間（`app.dart`：`RestGuard` 不算家長模式、家長關卡和背景的時間，動的畫面先做完動作和伸展才休息，家長模式留在背景就回首頁；每個畫面包 `BackKey`，手機的返回鍵不會關掉 APP；`finishGo`）、毛球偶的動畫（`figures.dart`：`PoseView` 照拍子換兩個姿勢再加整隻的動作、`BreathFlower`）、共用元件（`widgets.dart`：`Pressable` 原始手指事件、只認第一根手指、滑走或取消不算點；`speak`、`HushOnLeave`、`Later` 等語音念完；`BackKey`，`TopBar` 讓返回鍵和小房子一樣）、文字（`strings.dart`）、顏色。
+- `app/lib/features/`：第一次的問題（`hello`）、選帶路的動物（`guide`）、首頁（`home`）、先看看四周（`space`）、跟著做（`follow`：冒險、自己排、慢慢伸展都用它）、動物舞會（`party`）、自己排（`build`）、休息（`rest`）、家長關卡和家長模式（`parent`：`ParentIdle` 5 分鐘沒碰就關上、`parentGateShowing`）。
 - Android `MainActivity.kt` 和 iOS `AppDelegate.swift` 的 `animal_moves/screen` 通道：動的時候螢幕保持亮著（視窗旗標，不要權限）。
 - 圖：`design/art/`（`kit.py` 毛球、毛根、會轉的大眼睛、不織布；`animals.py` 兩種骨架和每個動作的兩個姿勢；`kids.py`「像這樣」；`guides.py`；`scenes.py`；`ui.py`（含先看看四周的卡）；`icon.py`；`build.py all`、`sheet`、`fluttercheck`），約定在 `docs/art.md`。聲音：`design/sounds/make_sounds.py`（86 個檔，`README.md` 有每一個）。
-- 測試：`rules_test`（動作、冒險、換掉關掉的動作、舞會、自己排、存檔、不說「做對了」）、`art_test`、`safety_test`（權限、家長關卡、先看看四周、免費版）、`version_test`、`layout_test`（每個畫面在手機和平板、橫的直的都排得下）、`screens_test`（家長模式和背景不算時間、離開畫面的語音、等語音念完、第一根手指、關掉的動作不再出現、過午夜、三個聲音開關、「做好了」才往下、時間到了先做完、伸展不被打斷；程式檢查加的：安靜模式的圖和故事、連按「做好了」、時間到了最多再三分鐘、背景和手機時間往回調、全部關掉也能玩、音樂停和開始的順序）、`flow_test`（手機和平板、三個難度、每個玩法、橫的直的都截圖）、`demo/demo_video_test.dart`（`--dart-define=DEMO=true`，再 `python3 tools/demo_audio.py`）。
+- 測試：`rules_test`（動作、冒險、換掉關掉的動作、舞會、自己排、存檔、不說「做對了」）、`art_test`、`safety_test`（權限、家長關卡、先看看四周、免費版）、`version_test`、`layout_test`（每個畫面在手機、360×640 的小手機和平板、橫的直的都排得下；「像這樣」的圖夠大，截圖在 `build/screenshots/layout/`）、`screens_test`（家長模式和背景不算時間、離開畫面的語音、等語音念完、第一根手指、關掉的動作不再出現、過午夜、三個聲音開關、「做好了」才往下、時間到了先做完、伸展不被打斷；程式檢查加的：安靜模式的圖和故事、連按「做好了」、時間到了最多再三分鐘、背景和手機時間往回調、全部關掉也能玩、音樂停和開始的順序；0.1.1 加的：返回鍵、關掉再打開接著算、家長模式和關卡自己關上、關卡等待變長、大人一起做時舞會也會自己停、先看看四周螢幕亮著）、`flow_test`（手機和平板、三個難度、每個玩法、橫的直的都截圖）、`demo/demo_video_test.dart`（`--dart-define=DEMO=true`，再 `python3 tools/demo_audio.py`）。
 
-## 目前的狀態（2026-11-15）
-- 0.1.0 已發布（2026-11-16）：Releases 有三個 APK，App 和 Release 都成功；Secrets 加好了。發布前做過程式檢查（見下一行）。
-- 2026-11-15 做過一次程式檢查（版本還是 0.1.0），修了：
-  - 安靜模式：「像這樣」的小朋友不再跳在空中（青蛙、兔子、袋鼠、梅花鹿有腳不離地的圖 `kids/<動作>-quiet_b.svg`），梅花鹿自己也改成大步走（`moves/deer-quiet_b.svg`）；故事不再說「跳過荷葉」這類的話（`adventures.dart` 的 `quietStory`）。
-  - 家長關掉的動作被換掉時，備用動作不再帶著原來的故事（例如關掉趴地的動作，還說「爬過山洞！」）；動物舞會台上跳舞的動物也不會是關掉的（`partyDancers`）。
-  - 「做好了！」連按兩下、或剛好在音樂結束時按，只往下一次（`follow_screen.dart` 的 `_tapGuard`，0.8 秒）。
-  - 時間到了：「一定要按做好了」的等待會自己往伸展走、「再一次」不能按、停在「謝謝你陪我們」的畫面也會去休息；不管怎麼暫停、繼續，最多再動三分鐘就休息（`RestGuard.windDownMost`）。
-  - `RestGuard`：家長模式和暫停的時間從換畫面的那一刻算（不再差到兩秒）；APP 在背景不到十分鐘的時間不算玩的時間、在背景時不會叫休息；手機時間往回調不會多玩。
-  - 音樂：停的指令會排在還在載入的開始之後，「停！」或暫停時音樂不會又響起來（`SystemSounds` 的 `_switching`，測試用 `MusicLoop`）。
-  - 不穩定的測試：家長關卡鎖住的測試按「1」「0」，題目剛好等於 10 時會答對；改成只按「0」。
-- 還沒在真手機上試過：**站在 2 公尺外看不看得清楚動物的姿勢、聽不聽得到**；語音（每隻帶路動物的高低）和音效好不好聽（做的時候沒辦法用耳朵聽）；拍子和音樂會不會慢慢對不上（APP 自己數拍子）；螢幕會不會保持亮著；橫的直的轉來轉去。
+## 目前的狀態（2026-11-26）
+- 0.1.0 已發布（2026-11-16）：Releases 有三個 APK，App 和 Release 都成功；Secrets 加好了。發布前做過一次程式檢查（安靜模式的圖和故事、備用動作的故事、連按「做好了」、時間到了最多再三分鐘、背景和時鐘、音樂停和開始的順序）。
+- **0.1.1 做好了、還沒發布**（在 `claude/relaxed-albattani-6mbwpz` 分支，推 `main` 要先問使用者）：2026-11-26 兄弟 APP 一起檢查後修的——
+  - 聲音走媒體音量（以前跟著鈴聲：手機震動時沒有音樂，動物舞會玩不起來）。
+  - 打開「大人一起做」，動物舞會一樣會自己停；大人按住是多一個方法（大人按的那次代替快到的那一次）。
+  - APP 關掉 10 分鐘內再打開接著算玩的時間（存在手機裡）；家長關卡上的時間不算。
+  - 手機的返回鍵不會關掉 APP：冒險和舞會是暫停，做完的畫面、自己排、先看看四周回首頁，首頁和休息畫面沒反應。
+  - 先看看四周的時候螢幕保持亮著，換到跟著做也不會暗掉（`ScreenAwake`）。
+  - 360×640 的小手機：首頁三個大按鈕一排兩個、卡片變矮，帶路動物不會被擠出去；直著拿時「像這樣」的圖從 20～40 點變成 100 點左右（說明和數數放在圖旁邊）。
+  - 家長模式和家長關卡切到背景或 5 分鐘沒碰會自己關上；休息畫面解開後不會留著進家長模式的門；家長關卡連錯等 1、5、15 分鐘，存在手機裡。
+  - 語音：設定只做一次、只念最新的一句、`stop()` 之後不會再念；APP 在背景時不說；Android 11 以上找得到語音（`TTS_SERVICE`）。
+  - 不跟 Google 備份（`allowBackup`、`data_extraction_rules.xml`）；打包時多檢查相機、麥克風、聯絡人、相片的權限。
+- 還沒在真手機上試過：**站在 2 公尺外看不看得清楚動物的姿勢、聽不聽得到**；語音（每隻帶路動物的高低）和音效好不好聽（做的時候沒辦法用耳朵聽）；拍子和音樂會不會慢慢對不上（APP 自己數拍子）；螢幕會不會保持亮著（先看看四周也是）；震動模式下有沒有音樂；橫的直的轉來轉去；小手機直著拿時「像這樣」的圖夠不夠大。
