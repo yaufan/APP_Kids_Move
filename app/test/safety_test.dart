@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:animal_moves/core/game.dart';
 import 'package:animal_moves/core/guides.dart';
+import 'package:animal_moves/core/sounds.dart';
 import 'package:animal_moves/features/parent/parent_gate.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -11,6 +13,39 @@ import 'helpers.dart';
 /// Privacy, the parent gate, 「先看看四周」 and the free version
 /// (docs/design.md 「安全和隱私」).
 void main() {
+  test('the phone\'s speech engine can be found, and nothing is backed up or moved to another phone', () {
+    final manifest = File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+    expect(manifest, contains('<action android:name="android.intent.action.TTS_SERVICE" />'), reason: 'Android 11+ hides the speech engine otherwise');
+    expect(manifest, contains('android:allowBackup="false"'));
+    expect(manifest, contains('android:fullBackupContent="false"'));
+    expect(manifest, contains('android:dataExtractionRules="@xml/data_extraction_rules"'));
+    final rules = File('android/app/src/main/res/xml/data_extraction_rules.xml').readAsStringSync();
+    for (final part in ['cloud-backup', 'device-transfer']) {
+      final m = RegExp('<$part>(.*?)</$part>', dotAll: true).firstMatch(rules);
+      expect(m, isNotNull, reason: part);
+      for (final domain in ['root', 'file', 'database', 'sharedpref', 'external']) {
+        expect(m![1], contains('<exclude domain="$domain" />'), reason: '$part leaves out $domain');
+      }
+    }
+    for (final w in ['app.yml', 'release.yml']) {
+      final flow = File('../.github/workflows/$w').readAsStringSync();
+      for (final p in ['INTERNET', 'LOCATION', 'AD_ID', 'CAMERA', 'RECORD_AUDIO', 'READ_CONTACTS', 'READ_MEDIA_', 'READ_EXTERNAL_STORAGE']) {
+        expect(flow, contains(p), reason: '$w stops an APK that asks for $p');
+      }
+    }
+  });
+
+  test('sounds play on the media stream (heard on vibrate), never taking the audio focus', () {
+    expect(soundContext.android.usageType, AndroidUsageType.media);
+    expect(soundContext.android.contentType, AndroidContentType.music);
+    expect(soundContext.android.audioFocus, AndroidAudioFocus.none, reason: 'sounds never stop one another or the voice');
+    expect(soundContext.iOS.category, AVAudioSessionCategory.ambient, reason: 'iPhone: mixes in, as before');
+    final code = File('lib/core/sounds.dart').readAsStringSync();
+    expect(code, isNot(contains('respectSilence: true')), reason: 'on Android that is the ringtone stream');
+    expect(code, contains('audioContext: soundContext'), reason: 'every sound gets it');
+    expect(code, contains('setAudioContext(soundContext)'));
+  });
+
   test('the app asks for no permissions and takes no links from other apps', () {
     final manifest = File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
     expect(manifest, isNot(contains('uses-permission')), reason: 'no internet, camera, microphone, sensors, location…');
