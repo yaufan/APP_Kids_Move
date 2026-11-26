@@ -100,6 +100,26 @@ class Later {
   }
 }
 
+/// The phone's back key (or back gesture) never closes the app, which would
+/// end a go halfway: it does what the screen's own button does ([onBack]:
+/// home, or pause while moving), or nothing at all on the home screen and
+/// at the rest.
+class BackKey extends StatelessWidget {
+  const BackKey({super.key, this.onBack, required this.child});
+
+  final VoidCallback? onBack;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) onBack?.call();
+        },
+        child: child,
+      );
+}
+
 /// Plays a sound (its soft version in quiet mode).
 void sfx(WidgetRef ref, String name) => ref.read(soundsProvider).play(soundFor(name, quiet: ref.read(gameProvider).settings.quiet));
 
@@ -477,8 +497,11 @@ class TopBar extends StatelessWidget {
   final VoidCallback? onHome;
   final Widget? trailing;
 
+  /// (The phone's back key does what the home button does.)
   @override
-  Widget build(BuildContext context) => Padding(
+  Widget build(BuildContext context) => BackKey(
+        onBack: onHome,
+        child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
         child: Row(children: [
           if (onHome != null) RoundButton(label: Strings.home, icon: Icons.home_rounded, onTap: onHome, size: 50, color: Felt.stamp) else const SizedBox(width: 50),
@@ -495,5 +518,6 @@ class TopBar extends StatelessWidget {
           const SizedBox(width: 8),
           trailing ?? const SizedBox(width: 50),
         ]),
+      ),
       );
 }

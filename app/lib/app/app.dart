@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/adventures.dart';
+import '../core/game.dart';
 import '../core/providers.dart';
 import '../features/build/build_screen.dart';
 import '../features/follow/follow_screen.dart';
@@ -19,6 +20,7 @@ import '../features/rest/rest_screen.dart';
 import '../features/space/space_screen.dart';
 import 'strings.dart';
 import 'theme.dart';
+import 'widgets.dart';
 
 /// The screens where a child is moving: they need 「先看看四周」 first, and
 /// when the play time is up they finish the move and the stretch before
@@ -51,18 +53,37 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (at == '/space' && !movingPath(Uri.parse(state.uri.queryParameters['next'] ?? '/').path)) return '/';
       return null;
     },
+    // The phone's back key never closes the app: a screen's top bar makes it
+    // do what its home button does, a moving screen pauses; on the home
+    // screen, the first questions and the rest it does nothing.
     routes: [
-      GoRoute(path: '/', builder: (_, _) => const HomeScreen()),
-      GoRoute(path: '/hello', builder: (_, _) => const HelloScreen()),
-      GoRoute(path: '/guide', builder: (_, _) => const GuideScreen()),
-      GoRoute(path: '/space', builder: (_, s) => SpaceScreen(next: s.uri.queryParameters['next'] ?? '/')),
-      GoRoute(path: '/go/:id', builder: (_, s) => FollowScreen(key: ValueKey(s.uri.toString()), source: FollowSource.adventure, adventure: s.pathParameters['id'])),
-      GoRoute(path: '/run', builder: (_, _) => const FollowScreen(source: FollowSource.routine)),
-      GoRoute(path: '/calm', builder: (_, _) => const FollowScreen(source: FollowSource.calm)),
-      GoRoute(path: '/party', builder: (_, _) => const PartyScreen()),
-      GoRoute(path: '/build', builder: (_, _) => const BuildScreen()),
-      GoRoute(path: '/rest', builder: (_, _) => const RestScreen()),
-      GoRoute(path: '/parent', builder: (_, _) => const ParentScreen()),
+      GoRoute(path: '/', builder: (_, _) => const BackKey(child: HomeScreen())),
+      GoRoute(path: '/hello', builder: (_, _) => const BackKey(child: HelloScreen())),
+      // The first time there is no going back from picking a guide.
+      GoRoute(
+        path: '/guide',
+        builder: (context, _) => BackKey(
+          onBack: () {
+            if (ref.read(gameProvider).guide != null) GoRouter.of(context).go('/');
+          },
+          child: const GuideScreen(),
+        ),
+      ),
+      GoRoute(path: '/space', builder: (_, s) => BackKey(child: SpaceScreen(next: s.uri.queryParameters['next'] ?? '/'))),
+      GoRoute(path: '/go/:id', builder: (_, s) => BackKey(child: FollowScreen(key: ValueKey(s.uri.toString()), source: FollowSource.adventure, adventure: s.pathParameters['id']))),
+      GoRoute(path: '/run', builder: (_, _) => const BackKey(child: FollowScreen(source: FollowSource.routine))),
+      GoRoute(path: '/calm', builder: (_, _) => const BackKey(child: FollowScreen(source: FollowSource.calm))),
+      GoRoute(path: '/party', builder: (_, _) => const BackKey(child: PartyScreen())),
+      GoRoute(path: '/build', builder: (_, _) => const BackKey(child: BuildScreen())),
+      GoRoute(path: '/rest', builder: (_, _) => const BackKey(child: RestScreen())),
+      // Parent mode closes by itself after five minutes without a touch.
+      GoRoute(
+        path: '/parent',
+        builder: (context, _) {
+          void home() => GoRouter.of(context).go('/');
+          return BackKey(onBack: home, child: ParentIdle(onIdle: home, child: const ParentScreen()));
+        },
+      ),
     ],
   );
   ref.onDispose(router.dispose);
@@ -108,9 +129,12 @@ class MovesApp extends ConsumerWidget {
 /// move and the slow stretch first ([windDownProvider], at most
 /// [windDownMost]); then the animals sleep and the child is sent off to move
 /// for real. An hour later (or when a parent says so) play can go on. Away
-/// from the app for ten minutes counts as a rest; time in parent mode is not
-/// the child's play time, and neither is time with the app in the
-/// background; a phone clock moved back gives no extra time. It also counts
+/// from the app for ten minutes counts as a rest, closed or in the
+/// background: the sitting is kept on the phone, so the app closed and
+/// opened again goes on with it. Time on the parent gate or in parent mode is
+/// not the child's play time, and neither is time with the app in the
+/// background; a phone clock moved back gives no extra time. Parent mode left
+/// in the background is closed, so a child finds the home screen. It also counts
 /// the minutes for parent mode: played, and 「跟著動」 (on a moving screen,
 /// not paused). A change of screen or of the pause is counted the moment it
 /// happens, not on the next check.
@@ -120,7 +144,7 @@ class RestGuard extends ConsumerStatefulWidget {
   final Widget child;
 
   static const check = Duration(seconds: 2);
-  static const awayIsRest = Duration(minutes: 10);
+  static const awayIsRest = Sitting.goesOn;
 
   /// Seconds are saved this often.
   static const saveEvery = 30;
@@ -171,6 +195,7 @@ class _RestGuardState extends ConsumerState<RestGuard> {
     _router = ref.read(routerProvider);
     _from = _seen = _now;
     _router.routerDelegate.addListener(_changed);
+    parentGateShowing.addListener(_gate);
     ref.listenManual(pausedProvider, (_, _) => _changed());
     _startTimer();
     _life = AppLifecycleListener(
@@ -179,6 +204,12 @@ class _RestGuardState extends ConsumerState<RestGuard> {
         _away = _now;
         _look();
         _save();
+        // Parent mode is not left open for a child to find: home, and the
+        // gate has to be answered again.
+        if (_path.startsWith('/parent')) {
+          ParentPass.take();
+          _router.go('/');
+        }
       },
       onShow: () {
         final away = _away, now = _now;
@@ -206,6 +237,7 @@ class _RestGuardState extends ConsumerState<RestGuard> {
     _timer?.cancel();
     _life?.dispose();
     _router.routerDelegate.removeListener(_changed);
+    parentGateShowing.removeListener(_gate);
     super.dispose();
   }
 
@@ -214,10 +246,15 @@ class _RestGuardState extends ConsumerState<RestGuard> {
     _timer = Timer.periodic(RestGuard.check, (_) => _tick());
   }
 
-  /// What the time from now on is: play, 「跟著動」, parent mode.
+  /// The parent gate opened or closed (while the screens are being put up:
+  /// looked at just after).
+  void _gate() => Future.microtask(_changed);
+
+  /// What the time from now on is: play, 「跟著動」, parent mode (the parent
+  /// gate on top of a screen too).
   void _look() {
     final path = _path, now = _now;
-    final parent = path.startsWith('/parent');
+    final parent = path.startsWith('/parent') || parentGateShowing.value > 0;
     if (parent && _away == null) {
       _parentSince ??= now;
     } else if (_parentSince != null) {
@@ -259,13 +296,22 @@ class _RestGuardState extends ConsumerState<RestGuard> {
     _check();
   }
 
+  /// Saves the seconds played and followed, and the sitting: how much play
+  /// time it has used (parent time not yet given back left out) and when.
   void _save() {
     final p = _played ~/ 1000, m = _moved ~/ 1000;
-    if (p <= 0 && m <= 0) return;
     _played -= p * 1000;
     _moved -= m * 1000;
     final now = _now;
-    ref.read(gameProvider.notifier).change((g) => g.playedFor(now, p).followed(now, m));
+    var used = now.difference(ref.read(sessionStartProvider)) - _parentFor;
+    final since = _parentSince;
+    if (since != null && now.isAfter(since)) used -= now.difference(since);
+    final sitting = Sitting(used.isNegative ? Duration.zero : used, now);
+    ref.read(gameProvider.notifier).change((g) {
+      final played = p > 0 || m > 0 ? g.playedFor(now, p).followed(now, m) : g;
+      // Resting: there is no sitting to go on with.
+      return g.restSince != null ? played : played.copyWith(sitting: sitting);
+    });
   }
 
   void _check() {
@@ -284,7 +330,7 @@ class _RestGuardState extends ConsumerState<RestGuard> {
     if (_away != null) return;
     final g = ref.read(gameProvider);
     final path = _path;
-    if (path.startsWith('/parent')) return;
+    if (path.startsWith('/parent') || parentGateShowing.value > 0) return;
     if (g.restSince != null) {
       if (g.resting(now)) {
         if (path != '/rest') _router.go('/rest');

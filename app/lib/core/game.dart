@@ -163,6 +163,81 @@ abstract final class Days {
   static List<String> week(DateTime now) => [for (var i = 6; i >= 0; i--) key(DateTime(now.year, now.month, now.day - i))];
 }
 
+/// The sitting going on when the app was last in sight (docs/design.md
+/// 「每次玩多久」): the play time used so far, and when. Opened again within
+/// [goesOn], the same sitting goes on and the time the app was closed is not
+/// play time; later it is a new sitting.
+class Sitting {
+  const Sitting(this.used, this.seen);
+
+  final Duration used;
+  final DateTime seen;
+
+  /// Closed (or in the background) this long counts as a rest.
+  static const goesOn = Duration(minutes: 10);
+
+  /// When the sitting began, opened again at [now]: as much play time used
+  /// as before. A clock moved back meanwhile gives no extra time either.
+  DateTime? startAt(DateTime now) => now.difference(seen) >= goesOn ? null : now.subtract(used);
+
+  Map<String, dynamic> toJson() => {'used': used.inSeconds, 'seen': seen.toIso8601String()};
+
+  static Sitting? fromJson(dynamic j) {
+    if (j is! Map || j['used'] is! int || j['seen'] is! String) return null;
+    final seen = DateTime.tryParse(j['seen'] as String);
+    if (seen == null) return null;
+    return Sitting(Duration(seconds: math.max(0, math.min(j['used'] as int, 24 * 3600))), seen);
+  }
+}
+
+/// The parent gate's wrong answers (kept, so closing the app does not end a
+/// wait): three in a row and it waits 1 minute, then 5, then 15. A right
+/// answer starts over.
+class GateLock {
+  const GateLock({this.misses = 0, this.waits = 0, this.since});
+
+  /// Wrong answers since the last wait.
+  final int misses;
+
+  /// How many waits there were (the next one is longer).
+  final int waits;
+
+  /// When the last wait began.
+  final DateTime? since;
+
+  static const maxMisses = 3;
+  static const lengths = [Duration(minutes: 1), Duration(minutes: 5), Duration(minutes: 15)];
+
+  Duration get length => lengths[(waits - 1).clamp(0, lengths.length - 1)];
+
+  /// Waiting at [now]. A clock moved back (now before the wait began) is no
+  /// wait, so it can never last for ever.
+  bool locked(DateTime now) {
+    final s = since;
+    if (s == null) return false;
+    final d = now.difference(s);
+    return !d.isNegative && d < length;
+  }
+
+  /// How long is left of the wait at [now].
+  Duration left(DateTime now) => locked(now) ? since!.add(length).difference(now) : Duration.zero;
+
+  /// One more wrong answer at [now].
+  GateLock miss(DateTime now) => misses + 1 >= maxMisses ? GateLock(waits: math.min(waits + 1, 99), since: now) : GateLock(misses: misses + 1, waits: waits, since: since);
+
+  Map<String, dynamic> toJson() => {'misses': misses, 'waits': waits, if (since != null) 'since': since!.toIso8601String()};
+
+  static GateLock fromJson(dynamic j) {
+    if (j is! Map) return const GateLock();
+    final m = j['misses'], w = j['waits'], s = j['since'];
+    return GateLock(
+      misses: m is int ? m.clamp(0, maxMisses - 1) : 0,
+      waits: w is int ? w.clamp(0, 99) : 0,
+      since: s is String ? DateTime.tryParse(s) : null,
+    );
+  }
+}
+
 /// Everything kept on the phone (one small file, store.dart): no name, no
 /// photo, nothing about the child's body.
 class Game {
@@ -176,6 +251,8 @@ class Game {
     this.recent = const [],
     this.routines = const [],
     this.restSince,
+    this.sitting,
+    this.gate = const GateLock(),
   });
 
   final Settings settings;
@@ -206,6 +283,10 @@ class Game {
 
   /// When the play time ran out (null: playing).
   final DateTime? restSince;
+
+  /// The sitting when the app was last in sight (null: none to go on with).
+  final Sitting? sitting;
+  final GateLock gate;
 
   static const restLength = Duration(hours: 1);
   static const maxRoutines = 6;
@@ -242,6 +323,9 @@ class Game {
     List<List<String>>? routines,
     DateTime? restSince,
     bool clearRest = false,
+    Sitting? sitting,
+    bool clearSitting = false,
+    GateLock? gate,
   }) =>
       Game(
         settings: settings ?? this.settings,
@@ -253,6 +337,8 @@ class Game {
         recent: recent ?? this.recent,
         routines: routines ?? this.routines,
         restSince: clearRest ? null : (restSince ?? this.restSince),
+        sitting: clearSitting ? null : (sitting ?? this.sitting),
+        gate: gate ?? this.gate,
       );
 
   Game withSettings(Settings s) => copyWith(settings: s);
@@ -295,9 +381,11 @@ class Game {
 
   static bool _same(List<String> a, List<String> b) => a.length == b.length && [for (var i = 0; i < a.length; i++) a[i] == b[i]].every((x) => x);
 
-  Game rest(DateTime now) => copyWith(restSince: now);
+  /// The play time ran out: the rest begins (and the sitting is over).
+  Game rest(DateTime now) => copyWith(restSince: now, clearSitting: true);
 
-  Game playOn() => copyWith(clearRest: true);
+  /// Play goes on (a parent said so, or the rest is over): a new sitting.
+  Game playOn() => copyWith(clearRest: true, clearSitting: true);
 
   Map<String, dynamic> toJson() => {
         'version': 1,
@@ -310,6 +398,8 @@ class Game {
         'recent': recent,
         'routines': routines,
         if (restSince != null) 'restSince': restSince!.toIso8601String(),
+        if (sitting != null) 'sitting': sitting!.toJson(),
+        'gate': gate.toJson(),
       };
 
   /// Reads a saved game; anything broken or unknown is left out.
@@ -347,6 +437,8 @@ class Game {
               ],
       ].where((r) => r.isNotEmpty).take(maxRoutines).toList(),
       restSince: rest is String ? DateTime.tryParse(rest) : null,
+      sitting: Sitting.fromJson(j['sitting']),
+      gate: GateLock.fromJson(j['gate']),
     );
   }
 }
