@@ -25,6 +25,9 @@ const ready = Game(settings: Settings(asked: true), guide: Guide.macaque);
 const phone = (Size(1080, 2340), 2.75), phoneWide = (Size(2340, 1080), 2.75);
 const tablet = (Size(1620, 2160), 2.0), tabletWide = (Size(2160, 1620), 2.0);
 
+/// A small phone (360 × 640), upright and on its side.
+const smallPhone = (Size(1080, 1920), 3.0), smallPhoneWide = (Size(1920, 1080), 3.0);
+
 /// The app on a phone screen, starting from [game].
 class TestApp {
   TestApp(this.tester, this.store, this.sounds, this.voice, this.screen);
@@ -40,12 +43,13 @@ class TestApp {
   Game get game => container.read(gameProvider);
   void change(Game Function(Game g) f) => container.read(gameProvider.notifier).change(f);
 
-  static Future<TestApp> start(WidgetTester tester, {Game game = ready, Size size = const Size(2340, 1080), double ratio = 2.75, String at = '/', int seed = 1, RecordingVoice? voice}) async {
+  static Future<TestApp> start(WidgetTester tester, {Game game = ready, Size size = const Size(2340, 1080), double ratio = 2.75, String at = '/', int seed = 1, RecordingVoice? voice, DateTime? now}) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = ratio;
     addTearDown(tester.view.reset);
     final store = MemoryStore();
     final app = TestApp(tester, store, RecordingSounds(), voice ?? RecordingVoice(), RecordingScreen());
+    if (now != null) app.now = now;
     await tester.pumpWidget(RepaintBoundary(
       key: shotKey,
       child: ProviderScope(

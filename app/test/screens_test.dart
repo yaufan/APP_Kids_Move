@@ -9,6 +9,7 @@ import 'package:animal_moves/core/sounds.dart';
 import 'package:animal_moves/core/voice.dart';
 import 'package:animal_moves/features/parent/parent_gate.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'helpers.dart';
@@ -565,6 +566,279 @@ void main() {
     await tester.pump();
     expect(loop.playing, 'music_party');
     sounds.dispose();
+  });
+
+  group('round 1 fixes', () {
+    void hide(WidgetTester tester) {
+      for (final s in [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused]) {
+        tester.binding.handleAppLifecycleStateChanged(s);
+      }
+    }
+
+    void show(WidgetTester tester) {
+      for (final s in [AppLifecycleState.hidden, AppLifecycleState.inactive, AppLifecycleState.resumed]) {
+        tester.binding.handleAppLifecycleStateChanged(s);
+      }
+    }
+
+    /// Whether the app asked the phone to close it (the back key's default).
+    Future<bool> back(TestApp app) async {
+      var closed = false;
+      app.tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'SystemNavigator.pop') closed = true;
+        return null;
+      });
+      await app.tester.binding.handlePopRoute();
+      await app.settle(900);
+      app.tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null);
+      return closed;
+    }
+
+    Future<void> answerGate(TestApp app) async {
+      const digits = '零一二三四五六七八九';
+      final q = app.tester.widgetList<Text>(find.byType(Text)).map((t) => t.data ?? '').firstWhere((t) => t.contains('加') && t.contains('等於'));
+      final ns = [for (final c in q.split('')) if (digits.contains(c)) digits.indexOf(c)];
+      for (final c in '${ns[0] + ns[1]}'.split('')) {
+        await app.tester.tap(find.byKey(ValueKey('gate-key-$c')));
+        await app.settle(150);
+      }
+      await app.settle(600);
+    }
+
+    testWidgets('the back key never closes the app: a go pauses, a menu goes home, home and the rest stay', (tester) async {
+      final app = await TestApp.start(tester);
+      expect(await back(app), isFalse);
+      expect(app.location, '/');
+      await app.goMoving('/go/jungle');
+      await app.play(6);
+      expect(await back(app), isFalse);
+      expect(app.location, '/go/jungle');
+      expect(find.text(Strings.paused), findsOneWidget, reason: 'like the pause button');
+      expect(await back(app), isFalse);
+      expect(app.location, '/go/jungle', reason: 'paused: it stays until the grown-up taps');
+      app.go('/build');
+      await app.settle(800);
+      expect(await back(app), isFalse);
+      expect(app.location, '/', reason: 'like the home button');
+      app.go('/space?next=/party');
+      await app.settle(800);
+      expect(await back(app), isFalse);
+      expect(app.location, '/');
+      await app.goMoving('/party');
+      await app.play(4);
+      expect(await back(app), isFalse);
+      expect(app.location, '/party');
+      expect(find.text(Strings.paused), findsOneWidget);
+      app.go('/');
+      await app.settle(800);
+      ParentPass.grant();
+      app.go('/parent');
+      await app.settle();
+      expect(await back(app), isFalse);
+      expect(app.location, '/');
+      await app.tapLabel(Strings.parent, ms: 900);
+      expect(find.byKey(const ValueKey('gate-key-1')), findsOneWidget);
+      expect(await back(app), isFalse);
+      expect(find.byKey(const ValueKey('gate-key-1')), findsNothing, reason: 'only the gate closes');
+      app.change((g) => g.rest(app.now));
+      await app.settle(2600);
+      expect(app.location, '/rest');
+      expect(await back(app), isFalse);
+      expect(app.location, '/rest');
+      await app.end();
+    });
+
+    testWidgets('closed and opened again within ten minutes, the sitting goes on', (tester) async {
+      final first = await TestApp.start(tester);
+      first.now = first.now.add(const Duration(minutes: 12));
+      await first.settle(2600);
+      hide(tester);
+      await first.settle();
+      final saved = Game.fromJson(first.store.saved);
+      expect(saved.sitting, isNotNull);
+      expect(saved.sitting!.used.inMinutes, 12);
+      final closedAt = first.now;
+      // (Frames only come with the app in sight: closed after it is back.)
+      show(tester);
+      await first.end();
+      final app = await TestApp.start(tester, game: saved, now: closedAt.add(const Duration(minutes: 5)));
+      app.now = app.now.add(const Duration(minutes: 2));
+      await app.settle(2600);
+      expect(app.location, '/');
+      app.now = app.now.add(const Duration(minutes: 2));
+      await app.settle(2600);
+      expect(app.location, '/rest', reason: 'closing the app gave no new 15 minutes');
+      await app.end();
+    });
+
+    testWidgets('a sitting saved before going away goes on only within ten minutes', (tester) async {
+      final t0 = DateTime(2026, 11, 15, 10);
+      final soon = await TestApp.start(tester, game: ready.copyWith(sitting: Sitting(const Duration(minutes: 12), t0.subtract(const Duration(minutes: 4)))));
+      soon.now = soon.now.add(const Duration(minutes: 4));
+      await soon.settle(2600);
+      expect(soon.location, '/rest', reason: '12 + 4 minutes');
+      await soon.end();
+      final late = await TestApp.start(tester, game: ready.copyWith(sitting: Sitting(const Duration(minutes: 14), t0.subtract(const Duration(minutes: 11)))));
+      late.now = late.now.add(const Duration(minutes: 10));
+      await late.settle(2600);
+      expect(late.location, '/', reason: 'ten minutes away was a rest');
+      await late.end();
+      final back = await TestApp.start(tester, game: ready.copyWith(sitting: Sitting(const Duration(minutes: 14), t0.add(const Duration(hours: 2)))));
+      back.now = back.now.add(const Duration(minutes: 1, seconds: 10));
+      await back.settle(2600);
+      expect(back.location, '/rest', reason: 'a clock moved back while closed gives no extra time');
+      await back.end();
+    });
+
+    testWidgets('parent mode left in the background is closed: home, and the gate again', (tester) async {
+      final app = await TestApp.start(tester);
+      ParentPass.grant();
+      app.go('/parent');
+      await app.settle();
+      hide(tester);
+      await app.settle();
+      show(tester);
+      await app.settle();
+      expect(app.location, '/');
+      app.go('/parent');
+      await app.settle();
+      expect(app.location, '/', reason: 'the pass was used up');
+      await app.end();
+    });
+
+    testWidgets('the parent gate closes when the app goes away, and its time is not play time', (tester) async {
+      final app = await TestApp.start(tester);
+      app.now = app.now.add(const Duration(minutes: 10));
+      await app.settle(2600);
+      await app.tapLabel(Strings.parent, ms: 900);
+      expect(find.byKey(const ValueKey('gate-key-1')), findsOneWidget);
+      app.now = app.now.add(const Duration(minutes: 20));
+      await app.settle(2600);
+      expect(app.location, '/', reason: 'twenty minutes on the gate are not play time');
+      hide(tester);
+      await app.settle();
+      show(tester);
+      await app.settle(1200);
+      expect(find.byKey(const ValueKey('gate-key-1')), findsNothing, reason: 'a child finds the home screen');
+      app.now = app.now.add(const Duration(minutes: 4));
+      await app.settle(2600);
+      expect(app.location, '/');
+      app.now = app.now.add(const Duration(minutes: 2));
+      await app.settle(2600);
+      expect(app.location, '/rest', reason: '10 + 6 minutes played');
+      await app.end();
+    });
+
+    testWidgets('the gate and parent mode close by themselves after five minutes without a touch', (tester) async {
+      final app = await TestApp.start(tester);
+      await app.tapLabel(Strings.parent, ms: 900);
+      expect(find.byKey(const ValueKey('gate-key-1')), findsOneWidget);
+      await tester.pump(const Duration(minutes: 4));
+      await tester.tap(find.byKey(const ValueKey('gate-key-0')));
+      await tester.pump(const Duration(minutes: 4));
+      expect(find.byKey(const ValueKey('gate-key-1')), findsOneWidget, reason: 'a touch starts the five minutes again');
+      await tester.pump(const Duration(minutes: 1, seconds: 5));
+      await app.settle(1200);
+      expect(find.byKey(const ValueKey('gate-key-1')), findsNothing);
+      ParentPass.grant();
+      app.go('/parent');
+      await app.settle();
+      await tester.pump(const Duration(minutes: 5, seconds: 5));
+      await app.settle();
+      expect(app.location, '/');
+      await app.end();
+    });
+
+    testWidgets('the rest\'s gate lets play go on but does not open parent mode', (tester) async {
+      final app = await TestApp.start(tester);
+      app.change((g) => g.rest(app.now));
+      await app.settle(2600);
+      expect(app.location, '/rest');
+      await app.tapLabel(Strings.parent, ms: 900);
+      await answerGate(app);
+      await app.settle(2600);
+      expect(app.location, '/');
+      app.go('/parent');
+      await app.settle();
+      expect(app.location, '/', reason: 'no pass left over');
+      await app.end();
+    });
+
+    testWidgets('the gate\'s wait grows (1, 5, 15 minutes) and is kept when the app is closed', (tester) async {
+      var lock = const GateLock();
+      final t = DateTime(2026, 11, 15, 10);
+      for (final (at, wait) in [(0, 1), (2, 5), (10, 15), (30, 15)]) {
+        for (var i = 0; i < 3; i++) {
+          lock = lock.miss(t.add(Duration(minutes: at)));
+        }
+        expect(lock.left(t.add(Duration(minutes: at))), Duration(minutes: wait));
+      }
+      expect(lock.locked(t.add(const Duration(minutes: 20))), isFalse, reason: 'a clock moved back is no wait');
+      final app = await TestApp.start(tester);
+      await app.tapLabel(Strings.parent, ms: 900);
+      for (var i = 0; i < 6 && find.textContaining('請等').evaluate().isEmpty; i++) {
+        await tester.tap(find.byKey(const ValueKey('gate-key-0')));
+        await app.settle(100);
+      }
+      expect(find.textContaining('請等'), findsOneWidget);
+      final saved = Game.fromJson(app.store.saved);
+      expect(saved.gate.locked(app.now), isTrue);
+      await app.end();
+      final again = await TestApp.start(tester, game: saved);
+      await again.tapLabel(Strings.parent, ms: 900);
+      expect(find.textContaining('請等'), findsOneWidget, reason: 'still waiting after the app was closed');
+      await again.end();
+    });
+
+    testWidgets('with 大人一起做 on, the party still stops by itself; the grown-up\'s hold is one more way', (tester) async {
+      final app = await TestApp.start(tester, game: ready.withSettings(const Settings(asked: true, together: true)));
+      await app.goMoving('/party');
+      await app.play(3);
+      expect(find.byKey(const ValueKey('party-dance')), findsOneWidget);
+      var stopped = false;
+      for (var i = 0; i < 30 && !stopped; i++) {
+        await app.play(1);
+        stopped = find.byKey(const ValueKey('party-freeze')).evaluate().isNotEmpty;
+      }
+      expect(stopped, isTrue, reason: 'nobody held the stage: the music stopped by itself');
+      expect(app.sounds.music, isNull);
+      await app.end();
+    });
+
+    testWidgets('the screen stays on while 先看看四周 is read, and on into the go', (tester) async {
+      final app = await TestApp.start(tester);
+      expect(app.screen.awake, isFalse);
+      app.go('/go/jungle');
+      await app.settle(800);
+      expect(app.location, '/space');
+      expect(app.screen.awake, isTrue, reason: 'the cards are read while chairs are moved');
+      await app.play(30);
+      await app.tapLabel(Strings.ready, ms: 1600);
+      expect(app.location, '/go/jungle');
+      await app.play(2);
+      expect(app.screen.awake, isTrue, reason: 'the space screen going away does not let it sleep');
+      app.go('/');
+      await app.settle(1600);
+      expect(app.screen.awake, isFalse);
+      await app.end();
+    });
+
+    testWidgets('a quick change of music never plays the wrong tune or plays on after a stop', (tester) async {
+      final loop = SlowLoop();
+      final sounds = SystemSounds(loop: loop);
+      final owner = Object();
+      sounds.hold(owner, Music.home);
+      await tester.pump();
+      sounds.hold(owner, Music.party);
+      await tester.pump();
+      sounds.hold(owner, null);
+      await tester.pump();
+      loop.loading!.complete();
+      await tester.pump();
+      expect(loop.playing, isNull, reason: 'stopped after the start that was loading');
+      expect(loop.calls, ['stop', 'play ${Music.home.file}', 'stop']);
+      sounds.dispose();
+    });
   });
 }
 
