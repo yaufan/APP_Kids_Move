@@ -21,6 +21,9 @@ final soundsProvider = Provider<Sounds>((ref) => const SilentSounds());
 final voiceProvider = Provider<Voice>((ref) => const SilentVoice());
 final screenProvider = Provider<ScreenControl>((ref) => RecordingScreen());
 
+/// Who keeps the screen on (shared by the screens that do).
+final awakeProvider = Provider<ScreenAwake>((ref) => ScreenAwake(ref.read(screenProvider)));
+
 /// The game; every change is saved straight away.
 final gameProvider = NotifierProvider<GameNotifier, Game>(GameNotifier.new);
 
@@ -38,12 +41,17 @@ class GameNotifier extends Notifier<Game> {
   void settings(Settings Function(Settings s) f) => change((g) => g.withSettings(f(g.settings)));
 }
 
-/// When this sitting started (reset when a parent lets play go on).
+/// When this sitting started (reset when a parent lets play go on). The app
+/// closed and opened again within ten minutes goes on with the sitting it
+/// saved ([Sitting]).
 final sessionStartProvider = NotifierProvider<SessionStart, DateTime>(SessionStart.new);
 
 class SessionStart extends Notifier<DateTime> {
   @override
-  DateTime build() => ref.read(clockProvider)();
+  DateTime build() {
+    final now = ref.read(clockProvider)();
+    return ref.read(gameProvider).sitting?.startAt(now) ?? now;
+  }
 
   void restart() => state = ref.read(clockProvider)();
 

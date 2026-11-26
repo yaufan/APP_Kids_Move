@@ -18,6 +18,25 @@ class SystemScreen implements ScreenControl {
   }
 }
 
+/// The screens that want the screen kept on (先看看四周, a go, the party): it
+/// stays on while any of them does, so a screen going away (after the next
+/// one came) never lets it sleep under the next one.
+class ScreenAwake {
+  ScreenAwake(this._control);
+
+  final ScreenControl _control;
+  final _owners = <Object>{};
+  bool? _on;
+
+  void keepOn(Object owner, bool on) {
+    on ? _owners.add(owner) : _owners.remove(owner);
+    final want = _owners.isNotEmpty;
+    if (want == _on) return;
+    _on = want;
+    _control.keepOn(want);
+  }
+}
+
 /// Remembers what was asked (tests).
 class RecordingScreen implements ScreenControl {
   var awake = false;

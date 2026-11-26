@@ -96,7 +96,7 @@ abstract final class Strings {
   static String gateQuestion(String a, String b) => '$a 加 $b 等於多少？';
   static const gateRules = '大人算出來，才能進家長模式。';
   static const wrongAnswer = '不對喔，換一題。';
-  static String gateWait(int s) => '請等 $s 秒再試。';
+  static String gateWait(int s) => s > 60 ? '請等 ${(s + 59) ~/ 60} 分鐘再試。' : '請等 $s 秒再試。';
   static const backspace = '刪掉';
   static const cancel = '取消';
 
@@ -106,7 +106,7 @@ abstract final class Strings {
   static const levelTitle = '難度';
   static const levelNote = '小小：動作最簡單、平衡可以扶牆，一個冒險 5 個動作，一個動作約 18 秒；中：6～7 個、約 25 秒；大：7～8 個、約 34 秒，加上換邊和連續的動作。';
   static const playTime = '每次玩幾分鐘';
-  static const playTimeNote = '時間到了，會做完現在的動作和最後的伸展才休息；休息一小時，或家長在這裡解開。家長模式的時間不算。';
+  static const playTimeNote = '時間到了，會做完現在的動作和最後的伸展才休息；休息一小時，或家長在這裡解開。家長模式、家長關卡和 APP 在背景的時間不算；APP 關掉 10 分鐘內再打開會接著算。';
   static const resting = '現在是休息時間。';
   static const playOn = '再玩一次';
   static const safetyTitle = '安全';
@@ -119,7 +119,7 @@ abstract final class Strings {
   static const mustTap = '一定要按「做好了！」才往下';
   static const mustTapNote = '關著：音樂放完自己往下，按了可以提早。';
   static const togetherTitle = '大人一起做';
-  static const togetherNote = '語音說「和爸爸媽媽一起」，動物舞會可以大人當 DJ。';
+  static const togetherNote = '語音說「和爸爸媽媽一起」；動物舞會大人也可以當 DJ（按住，音樂就停），沒有按的時候音樂一樣會自己停。';
   static const movesTitle = '要哪些動作';
   static const movesNote = '關掉的動作不會出現在冒險、舞會和自己排裡；冒險會換成別的動作或跳過。';
   static const noJumps = '關掉全部跳的';

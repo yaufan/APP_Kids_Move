@@ -21,7 +21,8 @@ enum PartyPhase { intro, dance, freeze, end }
 /// when it really stops, 「停！」 and everyone keeps still (小小), or becomes
 /// an animal (中, 大 counting to five), counted up, never down. Nobody is
 /// ever 「out」: the app cannot see who moved. With a grown-up joining in,
-/// they are the DJ: holding the stage stops the music, letting go starts it.
+/// they can be the DJ as well: holding the stage stops the music, letting go
+/// starts it; the music still stops by itself when nobody holds it.
 class PartyScreen extends ConsumerStatefulWidget {
   const PartyScreen({super.key});
 
@@ -32,7 +33,7 @@ class PartyScreen extends ConsumerStatefulWidget {
 class _PartyScreenState extends ConsumerState<PartyScreen> with HushOnLeave {
   late final List<Freeze> _freezes;
   late final bool _dj;
-  late final ScreenControl _screen;
+  late final ScreenAwake _screen;
   late final AppLifecycleListener _life;
   var _phase = PartyPhase.intro;
 
@@ -55,8 +56,8 @@ class _PartyScreenState extends ConsumerState<PartyScreen> with HushOnLeave {
     final s = ref.read(gameProvider).settings;
     _dj = s.together;
     _freezes = partyPlan(s, ref.read(randomProvider));
-    _screen = ref.read(screenProvider);
-    _screen.keepOn(true);
+    _screen = ref.read(awakeProvider);
+    _screen.keepOn(this, true);
     _life = AppLifecycleListener(onHide: () {
       if (mounted && !_paused && _phase != PartyPhase.end) _pause();
     });
@@ -72,7 +73,7 @@ class _PartyScreenState extends ConsumerState<PartyScreen> with HushOnLeave {
   void dispose() {
     _stop();
     _life.dispose();
-    _screen.keepOn(false);
+    _screen.keepOn(this, false);
     super.dispose();
   }
 
@@ -109,7 +110,7 @@ class _PartyScreenState extends ConsumerState<PartyScreen> with HushOnLeave {
     if (_danced % 4 == 0) sfx(ref, 'clap');
     final windDown = ref.read(windDownProvider);
     if (_danced >= partyBeats || (windDown && _danced % 16 == 0)) return _end();
-    if (!_dj && _next < _freezes.length && _danced >= _freezes[_next].atBeat) {
+    if (_next < _freezes.length && _danced >= _freezes[_next].atBeat) {
       _freeze(_freezes[_next++]);
     }
   }
@@ -148,7 +149,7 @@ class _PartyScreenState extends ConsumerState<PartyScreen> with HushOnLeave {
   void _end() {
     _stop();
     setState(() => _phase = PartyPhase.end);
-    _screen.keepOn(false);
+    _screen.keepOn(this, false);
     sfx(ref, 'bow');
     final said = speak(ref, Strings.bow);
     if (ref.read(windDownProvider)) _restSoon(said);
@@ -169,6 +170,10 @@ class _PartyScreenState extends ConsumerState<PartyScreen> with HushOnLeave {
     final s = ref.read(gameProvider).settings;
     final poses = [for (final id in freezePoses) if (!s.off.contains(id)) movesById[id]!];
     final pose = s.level == Level.small || poses.isEmpty ? null : poses[ref.read(randomProvider).nextInt(poses.length)];
+    // The grown-up's stop takes the place of a stop of its own coming soon.
+    while (_next < _freezes.length && _freezes[_next].atBeat < _danced + 8) {
+      _next++;
+    }
     _freeze(Freeze(_danced, s.level.countTo, pose));
   }
 
@@ -182,13 +187,13 @@ class _PartyScreenState extends ConsumerState<PartyScreen> with HushOnLeave {
     _stop();
     _djFinger = null;
     ref.read(voiceProvider).stop();
-    _screen.keepOn(false);
+    _screen.keepOn(this, false);
     ref.read(pausedProvider.notifier).set(true);
     setState(() => _paused = true);
   }
 
   void _unpause() {
-    _screen.keepOn(true);
+    _screen.keepOn(this, true);
     ref.read(pausedProvider.notifier).set(false);
     setState(() => _paused = false);
     switch (_phase) {
@@ -208,6 +213,13 @@ class _PartyScreenState extends ConsumerState<PartyScreen> with HushOnLeave {
     finishGo(ref, context);
   }
 
+  /// The phone's back key: what the button on screen does (pause; at the
+  /// end, home).
+  void _back() {
+    if (_phase == PartyPhase.end) return _home();
+    if (!_paused) _pause();
+  }
+
   @override
   Widget build(BuildContext context) {
     // The time ran out while the bow panel was up: rest after all.
@@ -216,7 +228,9 @@ class _PartyScreenState extends ConsumerState<PartyScreen> with HushOnLeave {
     });
     final settings = ref.watch(gameProvider.select((g) => g.settings));
     final playing = !_paused && _phase == PartyPhase.dance;
-    return WithMusic(
+    return BackKey(
+      onBack: _back,
+      child: WithMusic(
       music: playing ? Music.party : null,
       child: Scaffold(
         backgroundColor: Felt.lilac,
@@ -288,6 +302,7 @@ class _PartyScreenState extends ConsumerState<PartyScreen> with HushOnLeave {
           ]),
         ),
       ),
+    ),
     );
   }
 

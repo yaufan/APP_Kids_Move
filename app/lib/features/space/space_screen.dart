@@ -6,6 +6,7 @@ import '../../app/strings.dart';
 import '../../app/theme.dart';
 import '../../app/widgets.dart';
 import '../../core/providers.dart';
+import '../../core/screen.dart';
 import '../../core/sounds.dart';
 
 /// 「動之前，先看看四周」 (docs/design.md 「安全」 1): before every go (or the
@@ -29,9 +30,14 @@ class _SpaceScreenState extends ConsumerState<SpaceScreen> with HushOnLeave {
   var _read = 0;
   Later? _later;
 
+  /// The screen stays on while the cards are read out (half a minute of
+  /// moving chairs, nobody touching the phone).
+  late final ScreenAwake _screen = ref.read(awakeProvider);
+
   @override
   void initState() {
     super.initState();
+    _screen.keepOn(this, true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       sfx(ref, 'look');
@@ -55,6 +61,7 @@ class _SpaceScreenState extends ConsumerState<SpaceScreen> with HushOnLeave {
   @override
   void dispose() {
     _later?.cancel();
+    _screen.keepOn(this, false);
     super.dispose();
   }
 
