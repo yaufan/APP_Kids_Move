@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -88,8 +90,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with HushOnLeave {
                       ],
                     ),
                   );
-              final cards = cardsOf(box.maxHeight * .4);
-              final btnH = w ? (box.maxHeight * .17).clamp(52.0, 76.0) : 64.0;
+              // Upright, two big buttons a row (smaller on a narrow phone, so
+              // three rows never push the guide off a 360 × 640 screen).
+              final labels = [Strings.party, Strings.build, Strings.calm];
+              var btnH = w ? (box.maxHeight * .17).clamp(52.0, 76.0) : 64.0;
+              if (!w) {
+                final room = box.maxWidth - 24;
+                double two(double h) => _BigButton.widthFor(context, labels[0], h) + _BigButton.widthFor(context, labels[2], h) + 12;
+                while (btnH > 48 && two(btnH) > room) {
+                  btnH -= 2;
+                }
+              }
               final big = [
                 _BigButton(label: Strings.party, art: 'ui/party', color: Felt.lilac, height: btnH, onTap: () => context.go('/party')),
                 _BigButton(label: Strings.build, art: 'ui/build', color: Felt.mint, height: btnH, locked: !s.buildOpen, onTap: s.buildOpen ? () => context.go('/build') : _locked),
@@ -129,7 +140,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with HushOnLeave {
                   const SizedBox(width: 60),
                 ]),
               );
-              final guide = GuideSays(text: Strings.whereToGo, size: w ? box.maxHeight * .2 : 92, textSize: 16, onTap: () => speak(ref, Strings.whereToGo));
+              // Upright, the cards take what the buttons and the guide leave
+              // (at most four tenths of the screen).
+              final perRow = w ? 3 : (labels.map((l) => _BigButton.widthFor(context, l, btnH)).fold(0.0, (a, b) => a + b) + 24 <= box.maxWidth - 24 ? 3 : 2);
+              final rows = (labels.length + perRow - 1) ~/ perRow;
+              final guideSize = !w && box.maxHeight < 640 ? 76.0 : 92.0;
+              final fixed = 62 + 10 + 16 + rows * btnH + (rows - 1) * 10 + guideSize + 12 + 8;
+              final cards = cardsOf(math.min(box.maxHeight * .4, math.max(150.0, box.maxHeight - fixed)));
+              final guide = GuideSays(text: Strings.whereToGo, size: w ? box.maxHeight * .2 : guideSize, textSize: 16, onTap: () => speak(ref, Strings.whereToGo));
               if (w) {
                 final bottom = btnH + 14;
                 return Column(children: [
@@ -238,6 +256,18 @@ class _AdventureCard extends StatelessWidget {
 class _BigButton extends StatelessWidget {
   const _BigButton({required this.label, required this.art, required this.color, required this.height, required this.onTap, this.locked = false});
 
+  static TextStyle _style(double height) => TextStyle(fontSize: height * .34, fontWeight: FontWeight.w700);
+
+  /// How wide a button [height] high with [label] is.
+  static double widthFor(BuildContext context, String label, double height) {
+    final text = TextPainter(
+      text: TextSpan(text: label, style: DefaultTextStyle.of(context).style.merge(_style(height))),
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    return height * (.12 + .84 + .1 + .3) + text.width + 1;
+  }
+
   final String label;
   final String art;
   final Color color;
@@ -261,7 +291,7 @@ class _BigButton extends StatelessWidget {
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               SizedBox(width: height * .84, height: height * .84, child: Art(locked ? 'ui/lock' : art)),
               SizedBox(width: height * .1),
-              Text(label, style: TextStyle(fontSize: height * .34, fontWeight: FontWeight.w700)),
+              Text(label, style: _style(height)),
             ]),
           ),
         ),

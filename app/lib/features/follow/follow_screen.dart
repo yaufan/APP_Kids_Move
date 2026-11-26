@@ -56,7 +56,7 @@ class FollowScreen extends ConsumerStatefulWidget {
 
 class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
   late final Plan _plan;
-  late final ScreenControl _screen;
+  late final ScreenAwake _screen;
   late final AppLifecycleListener _life;
   var _i = 0;
   var _phase = Phase.look;
@@ -87,8 +87,8 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
       FollowSource.routine => routinePlan(ref.read(draftProvider), s),
       FollowSource.calm => calmPlan(s, ref.read(clockProvider)()),
     };
-    _screen = ref.read(screenProvider);
-    _screen.keepOn(true);
+    _screen = ref.read(awakeProvider);
+    _screen.keepOn(this, true);
     _life = AppLifecycleListener(onHide: () {
       if (mounted && !_paused && _phase != Phase.end) _pause();
     });
@@ -107,7 +107,7 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
     _later?.cancel();
     _tapGuard?.cancel();
     _life.dispose();
-    _screen.keepOn(false);
+    _screen.keepOn(this, false);
     super.dispose();
   }
 
@@ -248,7 +248,7 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
     _stopAll();
     if (!mounted) return;
     setState(() => _phase = Phase.end);
-    _screen.keepOn(false);
+    _screen.keepOn(this, false);
     final now = ref.read(clockProvider)();
     final a = _plan.adventure;
     if (a != null) ref.read(gameProvider.notifier).change((g) => g.stamp(a, now));
@@ -294,13 +294,13 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
   void _pause() {
     _stopAll();
     ref.read(voiceProvider).stop();
-    _screen.keepOn(false);
+    _screen.keepOn(this, false);
     ref.read(pausedProvider.notifier).set(true);
     setState(() => _paused = true);
   }
 
   void _resume() {
-    _screen.keepOn(true);
+    _screen.keepOn(this, true);
     ref.read(pausedProvider.notifier).set(false);
     setState(() => _paused = false);
     switch (_phase) {
@@ -327,6 +327,13 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
     finishGo(ref, context);
   }
 
+  /// The phone's back key: what the button on screen does (pause; at the
+  /// end, home).
+  void _back() {
+    if (_phase == Phase.end) return _home();
+    if (!_paused) _pause();
+  }
+
   // ---------------------------------------------------------------- drawing
   @override
   Widget build(BuildContext context) {
@@ -338,7 +345,9 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
     ref.watch(windDownProvider);
     final step = _step;
     final calm = widget.source == FollowSource.calm || step.stretch;
-    return WithMusic(
+    return BackKey(
+      onBack: _back,
+      child: WithMusic(
       music: _paused ? null : _music,
       child: Scaffold(
         backgroundColor: calm ? Felt.calm1 : Felt.cream,
@@ -354,7 +363,9 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
                   SizedBox(width: (box.maxWidth / 3).clamp(270.0, 420.0), child: card),
                 ]);
               }
-              return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Expanded(flex: 11, child: stage), Expanded(flex: 9, child: card)]);
+              // A short phone gives the card (and its 「像這樣」 picture) half.
+              final short = box.maxHeight < 640;
+              return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Expanded(flex: short ? 1 : 11, child: stage), Expanded(flex: short ? 1 : 9, child: card)]);
             }),
             KeyedSubtree(key: ValueKey('follow-${_phase.name}-$_i'), child: const SizedBox.shrink()),
             if (_paused) _pausePanel(),
@@ -367,6 +378,7 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
           ]),
         ),
       ),
+    ),
     );
   }
 
@@ -440,6 +452,41 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
     final m = step.move;
     final kid = m == breathe ? null : PoseView(a: kidArt(m, 'a'), b: kidArt(m, 'b', quiet: s.quiet), beat: _beat, beatLength: step.stretch ? breathIn : _music.beat, motion: Motion.still, moving: _phase == Phase.move || _phase == Phase.wait, fast: step.fast, amount: .3);
     final big = TextStyle(fontSize: w ? 26 : 28, fontWeight: FontWeight.w700, height: 1.2);
+    final how = Text(m.howFor(s.level, quietMode: s.quiet), maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, height: 1.35, color: Felt.inkSoft));
+    final count = <Widget>[
+      if (step.stretch && _phase != Phase.look) ...[
+        Text(_inhale ? Strings.breatheIn : Strings.breatheOut, style: big.copyWith(color: Felt.edge(Felt.blue))),
+        const SizedBox(height: 4),
+        CountDots(count: breaths, lit: _lit, size: 30),
+      ] else ...[
+        const Text(Strings.countTogether, style: TextStyle(fontSize: 13, color: Felt.inkSoft)),
+        const SizedBox(height: 4),
+        CountDots(count: s.level.countTo, lit: _phase == Phase.move || _phase == Phase.wait ? _lit : 0, size: 30),
+      ],
+    ];
+    Widget picture(double side) => Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          const Text(Strings.likeThis, style: TextStyle(fontSize: 13, color: Felt.inkSoft)),
+          const SizedBox(height: 2),
+          SizedBox.square(
+            key: const ValueKey('like-this'),
+            dimension: side,
+            child: Container(decoration: feltBox(Colors.white, radius: 16, shadow: false, width: 2), padding: const EdgeInsets.all(4), child: kid),
+          ),
+        ]);
+    final buttons = Row(children: [
+      Expanded(
+        child: AnimatedScale(
+          scale: _phase == Phase.wait ? 1.06 : 1,
+          duration: const Duration(milliseconds: 300),
+          child: PillButton(label: Strings.done, onTap: _phase == Phase.end ? null : _done, height: 60, expand: true, color: Felt.done),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Opacity(
+        opacity: _canAgain ? 1 : .45,
+        child: RoundButton(label: Strings.again, icon: Icons.replay_rounded, onTap: _canAgain ? _again : null, size: 52),
+      ),
+    ]);
     return Container(
       margin: EdgeInsets.fromLTRB(w ? 0 : 10, w ? 10 : 6, 10, 10),
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
@@ -447,51 +494,42 @@ class _FollowScreenState extends ConsumerState<FollowScreen> with HushOnLeave {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(step.name, key: const ValueKey('move-name'), maxLines: 1, overflow: TextOverflow.ellipsis, style: big),
         const SizedBox(height: 2),
-        Text(m.howFor(s.level, quietMode: s.quiet), maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, height: 1.35, color: Felt.inkSoft)),
-        const SizedBox(height: 6),
-        Expanded(
-          child: LayoutBuilder(builder: (context, box) => Row(children: [
-            if (kid != null) ...[
-              Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Text(Strings.likeThis, style: TextStyle(fontSize: 13, color: Felt.inkSoft)),
-                const SizedBox(height: 2),
-                SizedBox.square(
-                  dimension: (box.maxHeight - 22).clamp(0.0, box.maxWidth * .5),
-                  child: Container(decoration: feltBox(Colors.white, radius: 16, shadow: false, width: 2), padding: const EdgeInsets.all(4), child: kid),
-                ),
-              ]),
-              const SizedBox(width: 10),
-            ],
-            Expanded(
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                if (step.stretch && _phase != Phase.look) ...[
-                  Text(_inhale ? Strings.breatheIn : Strings.breatheOut, style: big.copyWith(color: Felt.edge(Felt.blue))),
-                  const SizedBox(height: 4),
-                  CountDots(count: breaths, lit: _lit, size: 30),
-                ] else ...[
-                  const Text(Strings.countTogether, style: TextStyle(fontSize: 13, color: Felt.inkSoft)),
-                  const SizedBox(height: 4),
-                  CountDots(count: s.level.countTo, lit: _phase == Phase.move || _phase == Phase.wait ? _lit : 0, size: 30),
-                ],
-              ]),
-            ),
-          ])),
-        ),
-        const SizedBox(height: 8),
-        Row(children: [
+        if (w) ...[
+          // On its side: how to do it under the name, the picture beside the count.
+          how,
+          const SizedBox(height: 6),
           Expanded(
-            child: AnimatedScale(
-              scale: _phase == Phase.wait ? 1.06 : 1,
-              duration: const Duration(milliseconds: 300),
-              child: PillButton(label: Strings.done, onTap: _phase == Phase.end ? null : _done, height: 60, expand: true, color: Felt.done),
-            ),
+            child: LayoutBuilder(builder: (context, box) => Row(children: [
+              if (kid != null) ...[picture((box.maxHeight - 22).clamp(0.0, box.maxWidth * .5)), const SizedBox(width: 10)],
+              Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: count)),
+            ])),
           ),
-          const SizedBox(width: 8),
-          Opacity(
-            opacity: _canAgain ? 1 : .45,
-            child: RoundButton(label: Strings.again, icon: Icons.replay_rounded, onTap: _canAgain ? _again : null, size: 52),
+        ] else
+          // Upright: the 「像這樣」 picture as big as the card allows, with how to
+          // do it and the count beside it (shrunk to fit, never cut off).
+          Expanded(
+            child: LayoutBuilder(builder: (context, box) {
+              final side = kid == null ? 0.0 : (box.maxHeight - 22).clamp(0.0, box.maxWidth * .48);
+              final rest = box.maxWidth - (kid == null ? 0 : side + 10);
+              return Row(children: [
+                if (kid != null) ...[picture(side), const SizedBox(width: 10)],
+                SizedBox(
+                  width: rest,
+                  height: box.maxHeight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: SizedBox(
+                      width: rest,
+                      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [how, const SizedBox(height: 8), ...count]),
+                    ),
+                  ),
+                ),
+              ]);
+            }),
           ),
-        ]),
+        const SizedBox(height: 8),
+        buttons,
       ]),
     );
   }
