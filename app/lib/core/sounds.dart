@@ -98,6 +98,19 @@ class RecordingSounds implements Sounds {
   void release(Object owner) => _holders.release(owner);
 }
 
+/// How every sound plays: on Android the media stream (the media volume,
+/// heard with the phone on vibrate or silent like the voice), never taking
+/// the audio focus, so sounds never stop one another or the voice; on
+/// iPhone a mixing 「ambient」 session as before.
+final soundContext = AudioContext(
+  android: const AudioContextAndroid(
+    usageType: AndroidUsageType.media,
+    contentType: AndroidContentType.music,
+    audioFocus: AndroidAudioFocus.none,
+  ),
+  iOS: AudioContextIOS(category: AVAudioSessionCategory.ambient),
+);
+
 /// The one looping music player (audioplayers on the phone; tests give a
 /// pretend one).
 abstract interface class MusicLoop {
@@ -116,6 +129,7 @@ class _PlayerLoop implements MusicLoop {
     var p = _player;
     if (p == null) {
       p = _player = AudioPlayer();
+      await p.setAudioContext(soundContext);
       await p.setReleaseMode(ReleaseMode.loop);
     }
     return p;
@@ -173,9 +187,7 @@ class SystemSounds implements Sounds {
     _update();
   }
 
-  Future<void> _ready() => _setUp ??= AudioPlayer.global.setAudioContext(
-        AudioContextConfig(focus: AudioContextConfigFocus.mixWithOthers, respectSilence: true).build(),
-      );
+  Future<void> _ready() => _setUp ??= AudioPlayer.global.setAudioContext(soundContext);
 
   @override
   void play(String sfx) {
@@ -186,7 +198,7 @@ class SystemSounds implements Sounds {
   Future<void> _play(String sfx) async {
     try {
       await _ready();
-      final pool = await (_pools[sfx] ??= AudioPool.createFromAsset(path: 'sounds/$sfx.wav', maxPlayers: 4));
+      final pool = await (_pools[sfx] ??= AudioPool.create(source: AssetSource('sounds/$sfx.wav'), maxPlayers: 4, audioContext: soundContext));
       await pool.start(volume: _sfxVolume);
     } catch (_) {
       _pools.remove(sfx);

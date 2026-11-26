@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
 /// Reads things out in Taiwanese Mandarin: short, clear lines, because the
@@ -11,23 +12,49 @@ abstract interface class Voice {
 }
 
 class SystemVoice implements Voice {
-  FlutterTts? _tts;
+  /// Quiet while the app is out of sight: what was being said stops, and nothing new is said
+  /// until it is back.
+  SystemVoice() {
+    _life = AppLifecycleListener(
+      onHide: () {
+        _hidden = true;
+        stop();
+      },
+      onShow: () => _hidden = false,
+    );
+  }
+
+  late final AppLifecycleListener _life;
+  var _hidden = false;
+  Future<FlutterTts>? _ready;
   double? _rate, _pitch;
 
-  Future<FlutterTts> _engine() async {
-    final existing = _tts;
-    if (existing != null) return existing;
-    final tts = _tts = FlutterTts();
-    await tts.awaitSpeakCompletion(true);
-    await tts.setLanguage('zh-TW');
-    return tts;
-  }
+  /// Counts the lines asked for (and stops): a line still waiting for the engine when a newer one
+  /// (or a stop) comes is dropped, so lines never come out of order or over each other at start.
+  var _turn = 0;
+
+  /// The engine, set up once (every line waits for the same setting up).
+  Future<FlutterTts> _engine() => _ready ??= () async {
+        try {
+          final tts = FlutterTts();
+          await tts.awaitSpeakCompletion(true);
+          await tts.setLanguage('zh-TW');
+          return tts;
+        } catch (_) {
+          _ready = null;
+          rethrow;
+        }
+      }();
 
   @override
   Future<void> say(String zh, {bool slow = false, double pitch = 1.15}) async {
+    final turn = ++_turn;
+    if (_hidden) return;
     try {
       final tts = await _engine();
+      if (turn != _turn) return;
       await tts.stop();
+      if (turn != _turn) return;
       final rate = slow ? 0.34 : 0.46;
       if (rate != _rate) {
         _rate = rate;
@@ -37,6 +64,7 @@ class SystemVoice implements Voice {
         _pitch = pitch;
         await tts.setPitch(pitch);
       }
+      if (turn != _turn || _hidden) return;
       if (zh.isNotEmpty) await tts.speak(zh);
     } catch (_) {
       // No speech engine (tests, or a phone without one): the pictures, the
@@ -44,10 +72,15 @@ class SystemVoice implements Voice {
     }
   }
 
+  void dispose() => _life.dispose();
+
   @override
   Future<void> stop() async {
+    _turn++;
+    final ready = _ready;
+    if (ready == null) return;
     try {
-      await _tts?.stop();
+      await (await ready).stop();
     } catch (_) {}
   }
 }
